@@ -587,6 +587,58 @@ function Start-AutorunAnalysis {
                     $row++
                 }
                 
+                # Create Pivot Table for better analysis
+                Write-Status "Creating pivot table for analysis..." "Cyan"
+                try {
+                    # Add a new worksheet for pivot table
+                    $pivotWorksheet = $workbook.Worksheets.Add()
+                    $pivotWorksheet.Name = "Analysis Summary"
+                    
+                    # Create pivot table
+                    $pivotTable = $workbook.PivotCaches.Create(1, $worksheet.UsedRange, 1)  # xlDatabase = 1
+                    $pivotTable.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
+                    
+                    # Get the pivot table object
+                    $pivot = $pivotWorksheet.PivotTables("AutorunAnalysisPivot")
+                    
+                    # Add fields to pivot table
+                    $pivot.PivotFields("Status").Orientation = 1  # xlRowField = 1
+                    $pivot.PivotFields("Type").Orientation = 1    # xlRowField = 1
+                    $pivot.PivotFields("User").Orientation = 1    # xlRowField = 1
+                    
+                    # Add count of items
+                    $pivot.PivotFields("Name").Orientation = 4    # xlDataField = 4
+                    $pivot.PivotFields("Count of Name").Function = -4112  # xlCount = -4112
+                    
+                    # Add Publisher analysis
+                    $pivot.PivotFields("Publisher").Orientation = 2  # xlColumnField = 2
+                    
+                    # Format the pivot table
+                    $pivot.TableStyle2 = "PivotStyleMedium2"
+                    
+                    # Add title
+                    $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
+                    $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
+                    $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
+                    
+                    # Add summary statistics
+                    $summaryRow = 1
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Total Items: $($AllResults.Count)"
+                    $summaryRow++
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Suspicious (RED): $(($AllResults | Where-Object { $_.Status -eq 'RED' }).Count)"
+                    $summaryRow++
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "After-market (YELLOW): $(($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count)"
+                    $summaryRow++
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Baseline (WHITE): $(($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count)"
+                    
+                    # Auto-fit columns
+                    $pivotWorksheet.UsedRange.Columns.AutoFit()
+                    
+                    Write-Status "Pivot table created successfully" "Green"
+                } catch {
+                    Write-Status "Pivot table creation failed: $($_.Exception.Message)" "Yellow"
+                }
+                
                 # Save and close
                 $workbook.Save()
                 $workbook.Close()
