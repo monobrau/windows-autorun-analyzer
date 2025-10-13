@@ -549,66 +549,64 @@ function Start-AutorunAnalysis {
         if (Test-Path $OutputPath) {
             Write-Status "Basic Excel file created successfully" "Green"
             
-            # Now try to get the Excel object for color coding
+            # Now try to add color coding using COM object approach
             try {
-                Write-Status "Opening Excel file for color coding..." "Cyan"
+                Write-Status "Adding color coding using COM object..." "Cyan"
                 
-                # Try a different approach - create a new Excel file with PassThru
-                $tempPath = $OutputPath -replace '\.xlsx$', '_temp.xlsx'
-                $excel = $AllResults | Export-Excel -Path $tempPath -AutoSize -TableStyle Medium2 -PassThru
+                # Create Excel COM object
+                $excel = New-Object -ComObject Excel.Application
+                $excel.Visible = $false
+                $excel.DisplayAlerts = $false
                 
-                # Check if Excel object was created successfully
-                if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
-                    # Get the worksheet
-                    $ws = $excel.Workbook.Worksheets[0]
+                # Open the existing Excel file
+                $workbook = $excel.Workbooks.Open($OutputPath)
+                $worksheet = $workbook.Worksheets.Item(1)
                 
-                    # Add color coding
-                    $row = 2  # Start from row 2 (skip header)
-                    foreach ($result in $AllResults) {
-                        if ($result.Status -eq "RED") {
-                            $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
-                            $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
-                            $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
-                            $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
-                            $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
-                        } elseif ($result.Status -eq "YELLOW") {
-                            $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
-                            $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
-                            $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
-                            $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
-                            $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
-                        } elseif ($result.Status -eq "WHITE") {
-                            $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
-                            $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
-                            $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
-                            $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
-                            $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
-                        }
-                        $row++
+                # Add color coding
+                $row = 2  # Start from row 2 (skip header)
+                foreach ($result in $AllResults) {
+                    if ($result.Status -eq "RED") {
+                        $worksheet.Cells.Item($row, 1).Interior.Color = 255  # Light Red
+                        $worksheet.Cells.Item($row, 2).Interior.Color = 255
+                        $worksheet.Cells.Item($row, 3).Interior.Color = 255
+                        $worksheet.Cells.Item($row, 4).Interior.Color = 255
+                        $worksheet.Cells.Item($row, 5).Interior.Color = 255
+                    } elseif ($result.Status -eq "YELLOW") {
+                        $worksheet.Cells.Item($row, 1).Interior.Color = 65535  # Light Yellow
+                        $worksheet.Cells.Item($row, 2).Interior.Color = 65535
+                        $worksheet.Cells.Item($row, 3).Interior.Color = 65535
+                        $worksheet.Cells.Item($row, 4).Interior.Color = 65535
+                        $worksheet.Cells.Item($row, 5).Interior.Color = 65535
+                    } elseif ($result.Status -eq "WHITE") {
+                        $worksheet.Cells.Item($row, 1).Interior.Color = 16777215  # White
+                        $worksheet.Cells.Item($row, 2).Interior.Color = 16777215
+                        $worksheet.Cells.Item($row, 3).Interior.Color = 16777215
+                        $worksheet.Cells.Item($row, 4).Interior.Color = 16777215
+                        $worksheet.Cells.Item($row, 5).Interior.Color = 16777215
                     }
-                    
-                    # Save and close
-                    $excel.Save()
-                    $excel.Dispose()
-                    
-                    # Replace the original file with the color-coded version
-                    if (Test-Path $tempPath) {
-                        Move-Item -Path $tempPath -Destination $OutputPath -Force
-                        Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
-                    } else {
-                        Write-Status "Excel file with color coding created successfully: $tempPath" "Green"
-                    }
-                } else {
-                    Write-Status "Excel object creation failed, but basic Excel file was created" "Yellow"
-                    Write-Status "Excel file saved without color coding: $OutputPath" "Green"
+                    $row++
                 }
+                
+                # Save and close
+                $workbook.Save()
+                $workbook.Close()
+                $excel.Quit()
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                
+                Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
             } catch {
                 Write-Status "Color coding failed, but basic Excel file was created: $($_.Exception.Message)" "Yellow"
                 Write-Status "Excel file saved without color coding: $OutputPath" "Green"
                 
-                # Clean up temp file if it exists
-                if (Test-Path $tempPath) {
-                    Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue
+                # Clean up COM objects if they exist
+                try {
+                    if ($workbook) { $workbook.Close() }
+                    if ($excel) { 
+                        $excel.Quit()
+                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                    }
+                } catch {
+                    # Ignore cleanup errors
                 }
             }
         } else {
