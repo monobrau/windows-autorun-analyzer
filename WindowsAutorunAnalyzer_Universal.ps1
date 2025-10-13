@@ -552,7 +552,10 @@ function Start-AutorunAnalysis {
             # Now try to get the Excel object for color coding
             try {
                 Write-Status "Opening Excel file for color coding..." "Cyan"
-                $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
+                
+                # Try a different approach - create a new Excel file with PassThru
+                $tempPath = $OutputPath -replace '\.xlsx$', '_temp.xlsx'
+                $excel = $AllResults | Export-Excel -Path $tempPath -AutoSize -TableStyle Medium2 -PassThru
                 
                 # Check if Excel object was created successfully
                 if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
@@ -587,7 +590,14 @@ function Start-AutorunAnalysis {
                     # Save and close
                     $excel.Save()
                     $excel.Dispose()
-                    Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
+                    
+                    # Replace the original file with the color-coded version
+                    if (Test-Path $tempPath) {
+                        Move-Item -Path $tempPath -Destination $OutputPath -Force
+                        Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
+                    } else {
+                        Write-Status "Excel file with color coding created successfully: $tempPath" "Green"
+                    }
                 } else {
                     Write-Status "Excel object creation failed, but basic Excel file was created" "Yellow"
                     Write-Status "Excel file saved without color coding: $OutputPath" "Green"
@@ -595,6 +605,11 @@ function Start-AutorunAnalysis {
             } catch {
                 Write-Status "Color coding failed, but basic Excel file was created: $($_.Exception.Message)" "Yellow"
                 Write-Status "Excel file saved without color coding: $OutputPath" "Green"
+                
+                # Clean up temp file if it exists
+                if (Test-Path $tempPath) {
+                    Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue
+                }
             }
         } else {
             Write-Status "Basic Excel file creation failed, falling back to CSV" "Yellow"
