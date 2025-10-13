@@ -543,10 +543,22 @@ function Start-AutorunAnalysis {
         try {
             # Create Excel file with color coding
             Write-Status "Creating Excel file with color coding..." "Cyan"
-            $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
             
-            # Check if Excel object was created successfully
-            if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
+            # First try to create the Excel file without PassThru
+            Write-Status "Creating basic Excel file..." "Cyan"
+            $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2
+            
+            # Check if file was created
+            if (Test-Path $OutputPath) {
+                Write-Status "Basic Excel file created successfully" "Green"
+                
+                # Now try to get the Excel object for color coding
+                try {
+                    Write-Status "Opening Excel file for color coding..." "Cyan"
+                    $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
+                    
+                    # Check if Excel object was created successfully
+                    if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
                 # Get the worksheet
                 $ws = $excel.Workbook.Worksheets[0]
             
@@ -575,12 +587,20 @@ function Start-AutorunAnalysis {
                     $row++
                 }
                 
-                # Save and close
-                $excel.Save()
-                $excel.Dispose()
-                Write-Status "Excel file created successfully: $OutputPath" "Green"
+                        # Save and close
+                        $excel.Save()
+                        $excel.Dispose()
+                        Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
+                    } else {
+                        Write-Status "Excel object creation failed, but basic Excel file was created" "Yellow"
+                        Write-Status "Excel file saved without color coding: $OutputPath" "Green"
+                    }
+                } catch {
+                    Write-Status "Color coding failed, but basic Excel file was created: $($_.Exception.Message)" "Yellow"
+                    Write-Status "Excel file saved without color coding: $OutputPath" "Green"
+                }
             } else {
-                Write-Status "Excel object creation failed, falling back to CSV" "Yellow"
+                Write-Status "Basic Excel file creation failed, falling back to CSV" "Yellow"
                 $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
                 $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
                 Write-Status "Results saved to CSV: $csvPath" "Yellow"
