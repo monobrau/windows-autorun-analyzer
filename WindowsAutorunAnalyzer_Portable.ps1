@@ -506,17 +506,10 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                 # Create Pivot Table for better analysis
                 Write-Status "Creating pivot table for analysis..." "Cyan"
                 try {
-                    # Check if Analysis Summary already exists and delete it
-                    try {
-                        $existingSheet = $excel.Workbook.Worksheets.Item("Analysis Summary")
-                        $existingSheet.Delete()
-                    } catch {
-                        # Sheet doesn't exist, continue
-                    }
-                    
-                    # Add a new worksheet for pivot table
+                    # Add a new worksheet for pivot table with unique name
+                    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
                     $pivotWorksheet = $excel.Workbook.Worksheets.Add()
-                    $pivotWorksheet.Name = "Analysis Summary"
+                    $pivotWorksheet.Name = "Analysis Summary $timestamp"
                     
                     # Add title
                     $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
@@ -525,7 +518,7 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     
                     # Create pivot table using the data from the main worksheet
                     $dataRange = $ws.UsedRange
-                    $pivotCache = $excel.Workbook.PivotCaches().Create(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotCache = $excel.Workbook.PivotCaches.Add(1, $dataRange, 1)  # xlDatabase = 1
                     $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
                     
                     # Configure pivot table fields
@@ -562,16 +555,10 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     
                     # Fallback to simple summary if pivot table fails
                     try {
-                        # Check if Analysis Summary already exists and delete it
-                        try {
-                            $existingSheet = $excel.Workbook.Worksheets.Item("Analysis Summary")
-                            $existingSheet.Delete()
-                        } catch {
-                            # Sheet doesn't exist, continue
-                        }
-                        
+                        # Add a new worksheet for summary with unique name
+                        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
                         $pivotWorksheet = $excel.Workbook.Worksheets.Add()
-                        $pivotWorksheet.Name = "Analysis Summary"
+                        $pivotWorksheet.Name = "Analysis Summary $timestamp"
                         
                         # Add title
                         $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"

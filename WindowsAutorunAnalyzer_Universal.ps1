@@ -590,17 +590,10 @@ function Start-AutorunAnalysis {
                 # Create Pivot Table for better analysis
                 Write-Status "Creating pivot table for analysis..." "Cyan"
                 try {
-                    # Check if Analysis Summary already exists and delete it
-                    try {
-                        $existingSheet = $workbook.Worksheets.Item("Analysis Summary")
-                        $existingSheet.Delete()
-                    } catch {
-                        # Sheet doesn't exist, continue
-                    }
-                    
-                    # Add a new worksheet for pivot table
+                    # Add a new worksheet for pivot table with unique name
+                    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
                     $pivotWorksheet = $workbook.Worksheets.Add()
-                    $pivotWorksheet.Name = "Analysis Summary"
+                    $pivotWorksheet.Name = "Analysis Summary $timestamp"
                     
                     # Add title
                     $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
@@ -609,7 +602,7 @@ function Start-AutorunAnalysis {
                     
                     # Create pivot table using the data from the main worksheet
                     $dataRange = $worksheet.UsedRange
-                    $pivotCache = $workbook.PivotCaches().Create(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotCache = $workbook.PivotCaches.Add(1, $dataRange, 1)  # xlDatabase = 1
                     $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
                     
                     # Configure pivot table fields
@@ -646,16 +639,10 @@ function Start-AutorunAnalysis {
                     
                     # Fallback to simple summary if pivot table fails
                     try {
-                        # Check if Analysis Summary already exists and delete it
-                        try {
-                            $existingSheet = $workbook.Worksheets.Item("Analysis Summary")
-                            $existingSheet.Delete()
-                        } catch {
-                            # Sheet doesn't exist, continue
-                        }
-                        
+                        # Add a new worksheet for summary with unique name
+                        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
                         $pivotWorksheet = $workbook.Worksheets.Add()
-                        $pivotWorksheet.Name = "Analysis Summary"
+                        $pivotWorksheet.Name = "Analysis Summary $timestamp"
                         
                         # Add title
                         $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
