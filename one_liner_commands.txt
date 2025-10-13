@@ -1,0 +1,83 @@
+Windows Autorun Analyzer - One-Liner Commands
+=============================================
+
+Copy and paste any of these commands to download and run the script:
+
+## 🚀 PowerShell One-Liners
+
+### Method 1: Download and Execute (Recommended)
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1" -OutFile "autorun.ps1"; .\autorun.ps1
+```
+
+### Method 2: Direct Execution (No File Saved)
+```powershell
+iex (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1')
+```
+
+### Method 3: With Custom Output Path
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1" -OutFile "autorun.ps1"; .\autorun.ps1 -OutputPath "C:\temp\analysis.csv"
+```
+
+### Method 4: Portable Mode Only
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1" -OutFile "autorun.ps1"; .\autorun.ps1 -Mode portable
+```
+
+## 🎯 Command Prompt One-Liners
+
+### Method 1: PowerShell from CMD
+```cmd
+powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1' -OutFile 'autorun.ps1'; .\autorun.ps1"
+```
+
+### Method 2: Direct Execution from CMD
+```cmd
+powershell -Command "iex (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1')"
+```
+
+## 🔧 Enterprise Deployment Commands
+
+### For Group Policy (Startup Script)
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1" -OutFile "C:\Windows\Temp\autorun.ps1"; powershell -ExecutionPolicy Bypass -File "C:\Windows\Temp\autorun.ps1" -OutputPath "C:\reports\autorun_$(Get-Date -Format 'yyyyMMdd').csv"
+```
+
+### For Scheduled Tasks
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1" -OutFile "C:\temp\autorun.ps1"; .\C:\temp\autorun.ps1 -Mode portable -OutputPath "C:\monitoring\daily_$(Get-Date -Format 'yyyyMMdd').csv"
+```
+
+### For Incident Response (Silent)
+```powershell
+iex (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1') -OutputPath "C:\incident\analysis_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+```
+
+## 📋 Usage Instructions
+
+1. **Copy** any command above
+2. **Paste** into PowerShell or Command Prompt
+3. **Press Enter** to execute
+4. **Wait** for analysis to complete
+5. **Check** the output CSV file
+
+## ✅ What Happens
+
+- Downloads the latest script from GitHub
+- Runs the Windows Autorun Analyzer
+- Analyzes all user profiles and system components
+- Generates a CSV report with color-coded results
+- Shows summary of findings
+
+## 🎯 Perfect For
+
+- **Quick Analysis**: Paste and run for immediate results
+- **Remote Deployment**: Send via email, chat, or documentation
+- **Incident Response**: Fast deployment during security incidents
+- **Regular Monitoring**: Schedule in Task Scheduler
+- **Training**: Easy to share with team members
+
+## 🔒 Security Note
+
+These commands download and execute code from GitHub. Ensure you trust the source and have appropriate security measures in place for your environment.

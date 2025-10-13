@@ -1,0 +1,16 @@
+Windows Autorun Analyzer - Copy This Command
+============================================
+
+Copy and paste this single line into PowerShell:
+
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1" -OutFile "autorun.ps1"; .\autorun.ps1
+
+That's it! This will:
+1. Download the latest script from GitHub
+2. Run the Windows Autorun Analyzer
+3. Generate a CSV report with all findings
+
+For Command Prompt, use this instead:
+powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/monobrau/windows-autorun-analyzer/main/WindowsAutorunAnalyzer_Universal.ps1' -OutFile 'autorun.ps1'; .\autorun.ps1"
+
+Repository: https://github.com/monobrau/windows-autorun-analyzer
