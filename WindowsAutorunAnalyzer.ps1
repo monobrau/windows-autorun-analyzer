@@ -101,6 +101,69 @@ function Test-SuspiciousItem {
     }
 }
 
+# Function to get file information including publisher, hashes, and timestamp
+function Get-FileInfo {
+    param($FilePath)
+    
+    $result = @{
+        Publisher = ""
+        ImagePath = ""
+        MD5Hash = ""
+        SHA1Hash = ""
+        SHA256Hash = ""
+        Timestamp = ""
+        VerifiedSigner = $false
+    }
+    
+    try {
+        # Clean up the file path (remove quotes and arguments)
+        $cleanPath = $FilePath -replace '^"([^"]+)".*$', '$1'
+        $cleanPath = $cleanPath -split ' ' | Select-Object -First 1
+        
+        if (Test-Path $cleanPath -ErrorAction SilentlyContinue) {
+            $fileInfo = Get-Item $cleanPath -ErrorAction SilentlyContinue
+            if ($fileInfo) {
+                $result.ImagePath = $fileInfo.FullName
+                $result.Timestamp = $fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+                
+                # Get file hashes
+                try {
+                    $md5 = Get-FileHash -Path $cleanPath -Algorithm MD5 -ErrorAction SilentlyContinue
+                    $sha1 = Get-FileHash -Path $cleanPath -Algorithm SHA1 -ErrorAction SilentlyContinue
+                    $sha256 = Get-FileHash -Path $cleanPath -Algorithm SHA256 -ErrorAction SilentlyContinue
+                    
+                    if ($md5) { $result.MD5Hash = $md5.Hash }
+                    if ($sha1) { $result.SHA1Hash = $sha1.Hash }
+                    if ($sha256) { $result.SHA256Hash = $sha256.Hash }
+                } catch {
+                    # Hash calculation failed
+                }
+                
+                # Get digital signature information
+                try {
+                    $signature = Get-AuthenticodeSignature -FilePath $cleanPath -ErrorAction SilentlyContinue
+                    if ($signature -and $signature.Status -eq "Valid") {
+                        $result.VerifiedSigner = $true
+                        $result.Publisher = $signature.SignerCertificate.Subject
+                        # Extract just the CN (Common Name) from the subject
+                        if ($result.Publisher -match "CN=([^,]+)") {
+                            $result.Publisher = $matches[1]
+                        }
+                    } elseif ($signature -and $signature.Status -ne "NotSigned") {
+                        $result.Publisher = "Invalid Signature"
+                    }
+                } catch {
+                    # Signature check failed
+                }
+            }
+        }
+    } catch {
+        # File info extraction failed
+    }
+    
+    return $result
+}
+
 # Function to get all user profiles
 function Get-AllUserProfiles {
     $profiles = @()
@@ -177,12 +240,20 @@ function Get-RegistryAutoruns {
                     } | ForEach-Object {
                         $suspicious = Test-SuspiciousItem -Path $_.Value -Command $_.Value
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                        $fileInfo = Get-FileInfo -FilePath $_.Value
                         $autoruns += [PSCustomObject]@{
                             User = $Username
                             Type = "Registry"
                             Location = $regPath
                             Name = $_.Name
                             Command = $_.Value
+                            Publisher = $fileInfo.Publisher
+                            ImagePath = $fileInfo.ImagePath
+                            MD5Hash = $fileInfo.MD5Hash
+                            SHA1Hash = $fileInfo.SHA1Hash
+                            SHA256Hash = $fileInfo.SHA256Hash
+                            Timestamp = $fileInfo.Timestamp
+                            VerifiedSigner = $fileInfo.VerifiedSigner
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
@@ -215,12 +286,20 @@ function Get-StartupFolderAutoruns {
                 Get-ChildItem -Path $startupPath -File -ErrorAction SilentlyContinue | ForEach-Object {
                     $suspicious = Test-SuspiciousItem -Path $_.FullName -Command $_.FullName
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                    $fileInfo = Get-FileInfo -FilePath $_.FullName
                     $autoruns += [PSCustomObject]@{
                         User = $Username
                         Type = "Startup Folder"
                         Location = $startupPath
                         Name = $_.Name
                         Command = $_.FullName
+                        Publisher = $fileInfo.Publisher
+                        ImagePath = $fileInfo.ImagePath
+                        MD5Hash = $fileInfo.MD5Hash
+                        SHA1Hash = $fileInfo.SHA1Hash
+                        SHA256Hash = $fileInfo.SHA256Hash
+                        Timestamp = $fileInfo.Timestamp
+                        VerifiedSigner = $fileInfo.VerifiedSigner
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
@@ -250,6 +329,7 @@ function Get-ScheduledTasks {
                 if ($action.Execute) {
                     $suspicious = Test-SuspiciousItem -Path $action.Execute -Command $action.Execute
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                    $fileInfo = Get-FileInfo -FilePath $action.Execute
                     $tasks += [PSCustomObject]@{
                         User = "SYSTEM"
                         Type = "Scheduled Task"
@@ -257,6 +337,13 @@ function Get-ScheduledTasks {
                         Name = $task.TaskName
                         Command = $action.Execute
                         Arguments = $action.Arguments
+                        Publisher = $fileInfo.Publisher
+                        ImagePath = $fileInfo.ImagePath
+                        MD5Hash = $fileInfo.MD5Hash
+                        SHA1Hash = $fileInfo.SHA1Hash
+                        SHA256Hash = $fileInfo.SHA256Hash
+                        Timestamp = $fileInfo.Timestamp
+                        VerifiedSigner = $fileInfo.VerifiedSigner
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
@@ -285,6 +372,7 @@ function Get-Services {
             if ($service.PathName) {
                 $suspicious = Test-SuspiciousItem -Path $service.PathName -Command $service.PathName
                 $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                $fileInfo = Get-FileInfo -FilePath $service.PathName
                 $services += [PSCustomObject]@{
                     User = "SYSTEM"
                     Type = "Service"
@@ -293,6 +381,13 @@ function Get-Services {
                     Command = $service.PathName
                     StartMode = $service.StartMode
                     State = $service.State
+                    Publisher = $fileInfo.Publisher
+                    ImagePath = $fileInfo.ImagePath
+                    MD5Hash = $fileInfo.MD5Hash
+                    SHA1Hash = $fileInfo.SHA1Hash
+                    SHA256Hash = $fileInfo.SHA256Hash
+                    Timestamp = $fileInfo.Timestamp
+                    VerifiedSigner = $fileInfo.VerifiedSigner
                     IsSuspicious = $suspicious.IsSuspicious
                     IsBaseline = $suspicious.IsBaseline
                     Reason = $suspicious.Reason
@@ -328,12 +423,20 @@ function Get-LogonScripts {
                     if ($logonScript -and $logonScript.UserInitMprLogonScript) {
                         $suspicious = Test-SuspiciousItem -Path $logonScript.UserInitMprLogonScript -Command $logonScript.UserInitMprLogonScript
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                        $fileInfo = Get-FileInfo -FilePath $logonScript.UserInitMprLogonScript
                         $scripts += [PSCustomObject]@{
                             User = $profile.Username
                             Type = "Logon Script"
                             Location = $logonScriptPath
                             Name = "UserInitMprLogonScript"
                             Command = $logonScript.UserInitMprLogonScript
+                            Publisher = $fileInfo.Publisher
+                            ImagePath = $fileInfo.ImagePath
+                            MD5Hash = $fileInfo.MD5Hash
+                            SHA1Hash = $fileInfo.SHA1Hash
+                            SHA256Hash = $fileInfo.SHA256Hash
+                            Timestamp = $fileInfo.Timestamp
+                            VerifiedSigner = $fileInfo.VerifiedSigner
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason

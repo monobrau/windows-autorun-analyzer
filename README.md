@@ -155,6 +155,13 @@ The script generates a CSV file with the following columns:
 - **Location**: Registry path or file location
 - **Name**: Item name
 - **Command**: Full command/path
+- **Publisher**: Digital signature publisher (extracted from certificate)
+- **ImagePath**: Full path to the executable file
+- **MD5Hash**: MD5 hash of the executable file
+- **SHA1Hash**: SHA-1 hash of the executable file
+- **SHA256Hash**: SHA-256 hash of the executable file
+- **Timestamp**: File last modified timestamp
+- **VerifiedSigner**: Boolean indicating if file has valid digital signature
 - **IsSuspicious**: Boolean flag for suspicious items
 - **IsBaseline**: Boolean flag for baseline Windows items
 - **Reason**: Explanation for categorization

@@ -119,6 +119,69 @@ function Test-SuspiciousItem {
     }
 }
 
+# Function to get file information including publisher, hashes, and timestamp
+function Get-FileInfo {
+    param($FilePath)
+    
+    $result = @{
+        Publisher = ""
+        ImagePath = ""
+        MD5Hash = ""
+        SHA1Hash = ""
+        SHA256Hash = ""
+        Timestamp = ""
+        VerifiedSigner = $false
+    }
+    
+    try {
+        # Clean up the file path (remove quotes and arguments)
+        $cleanPath = $FilePath -replace '^"([^"]+)".*$', '$1'
+        $cleanPath = $cleanPath -split ' ' | Select-Object -First 1
+        
+        if (Test-Path $cleanPath -ErrorAction SilentlyContinue) {
+            $fileInfo = Get-Item $cleanPath -ErrorAction SilentlyContinue
+            if ($fileInfo) {
+                $result.ImagePath = $fileInfo.FullName
+                $result.Timestamp = $fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+                
+                # Get file hashes
+                try {
+                    $md5 = Get-FileHash -Path $cleanPath -Algorithm MD5 -ErrorAction SilentlyContinue
+                    $sha1 = Get-FileHash -Path $cleanPath -Algorithm SHA1 -ErrorAction SilentlyContinue
+                    $sha256 = Get-FileHash -Path $cleanPath -Algorithm SHA256 -ErrorAction SilentlyContinue
+                    
+                    if ($md5) { $result.MD5Hash = $md5.Hash }
+                    if ($sha1) { $result.SHA1Hash = $sha1.Hash }
+                    if ($sha256) { $result.SHA256Hash = $sha256.Hash }
+                } catch {
+                    # Hash calculation failed
+                }
+                
+                # Get digital signature information
+                try {
+                    $signature = Get-AuthenticodeSignature -FilePath $cleanPath -ErrorAction SilentlyContinue
+                    if ($signature -and $signature.Status -eq "Valid") {
+                        $result.VerifiedSigner = $true
+                        $result.Publisher = $signature.SignerCertificate.Subject
+                        # Extract just the CN (Common Name) from the subject
+                        if ($result.Publisher -match "CN=([^,]+)") {
+                            $result.Publisher = $matches[1]
+                        }
+                    } elseif ($signature -and $signature.Status -ne "NotSigned") {
+                        $result.Publisher = "Invalid Signature"
+                    }
+                } catch {
+                    # Signature check failed
+                }
+            }
+        }
+    } catch {
+        # File info extraction failed
+    }
+    
+    return $result
+}
+
 # Function to get all user profiles
 function Get-AllUserProfiles {
     $profiles = @()
@@ -195,12 +258,20 @@ function Get-RegistryAutoruns {
                     } | ForEach-Object {
                         $suspicious = Test-SuspiciousItem -Path $_.Value -Command $_.Value
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                        $fileInfo = Get-FileInfo -FilePath $_.Value
                         $autoruns += [PSCustomObject]@{
                             User = $Username
                             Type = "Registry"
                             Location = $regPath
                             Name = $_.Name
                             Command = $_.Value
+                            Publisher = $fileInfo.Publisher
+                            ImagePath = $fileInfo.ImagePath
+                            MD5Hash = $fileInfo.MD5Hash
+                            SHA1Hash = $fileInfo.SHA1Hash
+                            SHA256Hash = $fileInfo.SHA256Hash
+                            Timestamp = $fileInfo.Timestamp
+                            VerifiedSigner = $fileInfo.VerifiedSigner
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
@@ -233,12 +304,20 @@ function Get-StartupFolderAutoruns {
                 Get-ChildItem -Path $startupPath -File -ErrorAction SilentlyContinue | ForEach-Object {
                     $suspicious = Test-SuspiciousItem -Path $_.FullName -Command $_.FullName
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                    $fileInfo = Get-FileInfo -FilePath $_.FullName
                     $autoruns += [PSCustomObject]@{
                         User = $Username
                         Type = "Startup Folder"
                         Location = $startupPath
                         Name = $_.Name
                         Command = $_.FullName
+                        Publisher = $fileInfo.Publisher
+                        ImagePath = $fileInfo.ImagePath
+                        MD5Hash = $fileInfo.MD5Hash
+                        SHA1Hash = $fileInfo.SHA1Hash
+                        SHA256Hash = $fileInfo.SHA256Hash
+                        Timestamp = $fileInfo.Timestamp
+                        VerifiedSigner = $fileInfo.VerifiedSigner
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
@@ -267,6 +346,7 @@ function Get-ScheduledTasks {
                 if ($action.Execute) {
                     $suspicious = Test-SuspiciousItem -Path $action.Execute -Command $action.Execute
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                    $fileInfo = Get-FileInfo -FilePath $action.Execute
                     $tasks += [PSCustomObject]@{
                         User = "SYSTEM"
                         Type = "Scheduled Task"
@@ -274,6 +354,13 @@ function Get-ScheduledTasks {
                         Name = $task.TaskName
                         Command = $action.Execute
                         Arguments = $action.Arguments
+                        Publisher = $fileInfo.Publisher
+                        ImagePath = $fileInfo.ImagePath
+                        MD5Hash = $fileInfo.MD5Hash
+                        SHA1Hash = $fileInfo.SHA1Hash
+                        SHA256Hash = $fileInfo.SHA256Hash
+                        Timestamp = $fileInfo.Timestamp
+                        VerifiedSigner = $fileInfo.VerifiedSigner
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
@@ -302,6 +389,7 @@ function Get-Services {
             if ($service.PathName) {
                 $suspicious = Test-SuspiciousItem -Path $service.PathName -Command $service.PathName
                 $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                $fileInfo = Get-FileInfo -FilePath $service.PathName
                 $services += [PSCustomObject]@{
                     User = "SYSTEM"
                     Type = "Service"
@@ -310,6 +398,13 @@ function Get-Services {
                     Command = $service.PathName
                     StartMode = $service.StartMode
                     State = $service.State
+                    Publisher = $fileInfo.Publisher
+                    ImagePath = $fileInfo.ImagePath
+                    MD5Hash = $fileInfo.MD5Hash
+                    SHA1Hash = $fileInfo.SHA1Hash
+                    SHA256Hash = $fileInfo.SHA256Hash
+                    Timestamp = $fileInfo.Timestamp
+                    VerifiedSigner = $fileInfo.VerifiedSigner
                     IsSuspicious = $suspicious.IsSuspicious
                     IsBaseline = $suspicious.IsBaseline
                     Reason = $suspicious.Reason
@@ -338,12 +433,20 @@ function Get-LogonScripts {
                     if ($logonScript -and $logonScript.UserInitMprLogonScript) {
                         $suspicious = Test-SuspiciousItem -Path $logonScript.UserInitMprLogonScript -Command $logonScript.UserInitMprLogonScript
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
+                        $fileInfo = Get-FileInfo -FilePath $logonScript.UserInitMprLogonScript
                         $scripts += [PSCustomObject]@{
                             User = $profile.Username
                             Type = "Logon Script"
                             Location = $logonScriptPath
                             Name = "UserInitMprLogonScript"
                             Command = $logonScript.UserInitMprLogonScript
+                            Publisher = $fileInfo.Publisher
+                            ImagePath = $fileInfo.ImagePath
+                            MD5Hash = $fileInfo.MD5Hash
+                            SHA1Hash = $fileInfo.SHA1Hash
+                            SHA256Hash = $fileInfo.SHA256Hash
+                            Timestamp = $fileInfo.Timestamp
+                            VerifiedSigner = $fileInfo.VerifiedSigner
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
@@ -405,9 +508,87 @@ function Start-AutorunAnalysis {
     # Create output
     Write-Status "Creating output..." "Green"
     
-    # Always use CSV for universal version
-    $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
-    $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+    # Try to import ImportExcel module
+    $excelModuleLoaded = $false
+    Write-Status "Attempting to load ImportExcel module..." "Cyan"
+    try {
+        Import-Module ImportExcel -ErrorAction SilentlyContinue
+        $excelModuleLoaded = $true
+        Write-Status "ImportExcel module loaded successfully" "Green"
+    } catch {
+        Write-Status "Standard import failed, trying alternative method..." "Yellow"
+        # Try alternative import methods
+        try {
+            $modulePath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\ImportExcel"
+            Write-Status "Looking for module in: $modulePath" "Cyan"
+            $latestVersion = Get-ChildItem $modulePath -Directory | Sort-Object Name -Descending | Select-Object -First 1
+            if ($latestVersion) {
+                Write-Status "Found version: $($latestVersion.Name)" "Cyan"
+                Import-Module "$($latestVersion.FullName)\ImportExcel.psm1" -ErrorAction SilentlyContinue
+                $excelModuleLoaded = $true
+                Write-Status "ImportExcel module loaded from: $($latestVersion.FullName)" "Green"
+            } else {
+                Write-Status "No ImportExcel module found in $modulePath" "Yellow"
+            }
+        } catch {
+            Write-Status "Alternative import also failed: $($_.Exception.Message)" "Red"
+        }
+    }
+    
+    # Check if ImportExcel module is available
+    Write-Status "Checking for Export-Excel command..." "Cyan"
+    $exportExcelCmd = Get-Command Export-Excel -ErrorAction SilentlyContinue
+    if ($exportExcelCmd) {
+        Write-Status "Export-Excel command found: $($exportExcelCmd.Source)" "Green"
+        try {
+            # Create Excel file with color coding
+            Write-Status "Creating Excel file with color coding..." "Cyan"
+            $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
+            
+            # Get the worksheet
+            $ws = $excel.Workbook.Worksheets[0]
+            
+            # Add color coding
+            $row = 2  # Start from row 2 (skip header)
+            foreach ($result in $AllResults) {
+                if ($result.Status -eq "RED") {
+                    $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
+                } elseif ($result.Status -eq "YELLOW") {
+                    $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
+                } elseif ($result.Status -eq "WHITE") {
+                    $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
+                }
+                $row++
+            }
+            
+            # Save and close
+            $excel.Save()
+            $excel.Dispose()
+            Write-Status "Excel file created successfully: $OutputPath" "Green"
+        } catch {
+            Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
+            $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+            $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+            Write-Status "Results saved to CSV: $csvPath" "Yellow"
+        }
+    } else {
+        # Fallback to CSV
+        $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+        $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+        Write-Status "ImportExcel module not available, using CSV: $csvPath" "Yellow"
+    }
     
     # Calculate counts
     $redCount = ($AllResults | Where-Object { $_.Status -eq 'RED' }).Count
@@ -530,7 +711,7 @@ switch ($Mode.ToLower()) {
 }
 
 # Execute the script if we have one
-if ($success -and $scriptPath) {
+if ($success -and $scriptPath -and $Mode -ne "local") {
     Write-Status "Executing Windows Autorun Analyzer..." "Green"
     try {
         & $scriptPath -OutputPath $OutputPath
@@ -540,8 +721,12 @@ if ($success -and $scriptPath) {
         Write-Status "Falling back to portable mode..." "Yellow"
         Start-AutorunAnalysis -OutputPath $OutputPath
     }
-} elseif (-not $success) {
-    Write-Status "Failed to obtain script, using portable mode..." "Yellow"
+} else {
+    if ($Mode -eq "local") {
+        Write-Status "Using built-in analysis engine..." "Green"
+    } else {
+        Write-Status "Failed to obtain script, using portable mode..." "Yellow"
+    }
     Start-AutorunAnalysis -OutputPath $OutputPath
 }
 
