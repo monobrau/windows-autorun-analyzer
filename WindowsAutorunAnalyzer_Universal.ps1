@@ -601,7 +601,7 @@ function Start-AutorunAnalysis {
                     
                     # Create pivot table using the data from the main worksheet
                     $dataRange = $worksheet.UsedRange
-                    $pivotCache = $workbook.PivotCaches.Create(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotCache = $workbook.PivotCaches().Create(1, $dataRange, 1)  # xlDatabase = 1
                     $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
                     
                     # Configure pivot table fields
