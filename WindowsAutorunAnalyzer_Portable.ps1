@@ -503,10 +503,10 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     $row++
                 }
                 
-                # Create Pivot Table for better analysis
-                Write-Status "Creating pivot table for analysis..." "Cyan"
+                # Create Analysis Summary with Interactive Tables
+                Write-Status "Creating analysis summary with interactive tables..." "Cyan"
                 try {
-                    # Add a new worksheet for pivot table with safe name
+                    # Add a new worksheet for analysis
                     $pivotWorksheet = $excel.Workbook.Worksheets.Add()
                     $pivotWorksheet.Name = "Analysis"
                     
@@ -515,56 +515,125 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
                     $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
                     
-                    # Create a simple pivot table using a different approach
-                    try {
-                        # Try using the Add method on the worksheet
-                        $pivotTable = $pivotWorksheet.PivotTables.Add($pivotWorksheet.Cells.Item(3, 1), $dataRange, "AutorunAnalysisPivot")
-                        
-                        # Configure pivot table fields
-                        $pivotTable.PivotFields("Status").Orientation = 1  # xlRowField = 1
-                        $pivotTable.PivotFields("Type").Orientation = 1    # xlRowField = 1
-                        $pivotTable.PivotFields("User").Orientation = 1    # xlRowField = 1
-                        
-                        # Add count of items
-                        $pivotTable.PivotFields("Name").Orientation = 4    # xlDataField = 4
-                        $pivotTable.PivotFields("Count of Name").Function = -4112  # xlCount = -4112
-                        
-                        # Add Publisher analysis
-                        $pivotTable.PivotFields("Publisher").Orientation = 2  # xlColumnField = 2
-                        
-                        # Format the pivot table
-                        $pivotTable.TableStyle2 = "PivotStyleMedium2"
-                    } catch {
-                        # If that fails, try the older method
-                        $pivotCache = $excel.Workbook.PivotCaches.Add(1, $dataRange, 1)
-                        $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
-                        
-                        # Configure pivot table fields
-                        $pivotTable.PivotFields("Status").Orientation = 1
-                        $pivotTable.PivotFields("Type").Orientation = 1
-                        $pivotTable.PivotFields("User").Orientation = 1
-                        $pivotTable.PivotFields("Name").Orientation = 4
-                        $pivotTable.PivotFields("Count of Name").Function = -4112
-                        $pivotTable.PivotFields("Publisher").Orientation = 2
-                        $pivotTable.TableStyle2 = "PivotStyleMedium2"
-                    }
+                    # Create summary statistics
+                    $row = 3
+                    $pivotWorksheet.Cells.Item($row, 1) = "Total Items:"
+                    $pivotWorksheet.Cells.Item($row, 2) = $AllResults.Count
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $row++
                     
-                    # Add summary statistics above the pivot table
-                    $summaryRow = 1
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Total Items: $($AllResults.Count)"
-                    $summaryRow++
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Suspicious (RED): $(($AllResults | Where-Object { $_.Status -eq 'RED' }).Count)"
-                    $summaryRow++
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "After-market (YELLOW): $(($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count)"
-                    $summaryRow++
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Baseline (WHITE): $(($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count)"
+                    $pivotWorksheet.Cells.Item($row, 1) = "Suspicious (RED):"
+                    $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'RED' }).Count
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $row++
+                    
+                    $pivotWorksheet.Cells.Item($row, 1) = "After-market (YELLOW):"
+                    $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $row++
+                    
+                    $pivotWorksheet.Cells.Item($row, 1) = "Baseline (WHITE):"
+                    $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $row += 3
+                    
+                    # Create Status breakdown table
+                    $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by Status:"
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Size = 12
+                    $row++
+                    
+                    $pivotWorksheet.Cells.Item($row, 1) = "Status"
+                    $pivotWorksheet.Cells.Item($row, 2) = "Count"
+                    $pivotWorksheet.Cells.Item($row, 3) = "Percentage"
+                    $pivotWorksheet.Range("A$row:C$row").Font.Bold = $true
+                    $pivotWorksheet.Range("A$row:C$row").Interior.Color = 15773696  # Light blue
+                    $row++
+                    
+                    $statusGroups = $AllResults | Group-Object Status | Sort-Object Count -Descending
+                    foreach ($group in $statusGroups) {
+                        $percentage = [math]::Round(($group.Count / $AllResults.Count) * 100, 1)
+                        $pivotWorksheet.Cells.Item($row, 1) = $group.Name
+                        $pivotWorksheet.Cells.Item($row, 2) = $group.Count
+                        $pivotWorksheet.Cells.Item($row, 3) = "$percentage%"
+                        $row++
+                    }
+                    $row += 2
+                    
+                    # Create Type breakdown table
+                    $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by Type:"
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Size = 12
+                    $row++
+                    
+                    $pivotWorksheet.Cells.Item($row, 1) = "Type"
+                    $pivotWorksheet.Cells.Item($row, 2) = "Count"
+                    $pivotWorksheet.Cells.Item($row, 3) = "Percentage"
+                    $pivotWorksheet.Range("A$row:C$row").Font.Bold = $true
+                    $pivotWorksheet.Range("A$row:C$row").Interior.Color = 15773696  # Light blue
+                    $row++
+                    
+                    $typeGroups = $AllResults | Group-Object Type | Sort-Object Count -Descending
+                    foreach ($group in $typeGroups) {
+                        $percentage = [math]::Round(($group.Count / $AllResults.Count) * 100, 1)
+                        $pivotWorksheet.Cells.Item($row, 1) = $group.Name
+                        $pivotWorksheet.Cells.Item($row, 2) = $group.Count
+                        $pivotWorksheet.Cells.Item($row, 3) = "$percentage%"
+                        $row++
+                    }
+                    $row += 2
+                    
+                    # Create User breakdown table
+                    $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by User:"
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Size = 12
+                    $row++
+                    
+                    $pivotWorksheet.Cells.Item($row, 1) = "User"
+                    $pivotWorksheet.Cells.Item($row, 2) = "Count"
+                    $pivotWorksheet.Cells.Item($row, 3) = "Percentage"
+                    $pivotWorksheet.Range("A$row:C$row").Font.Bold = $true
+                    $pivotWorksheet.Range("A$row:C$row").Interior.Color = 15773696  # Light blue
+                    $row++
+                    
+                    $userGroups = $AllResults | Group-Object User | Sort-Object Count -Descending
+                    foreach ($group in $userGroups) {
+                        $percentage = [math]::Round(($group.Count / $AllResults.Count) * 100, 1)
+                        $pivotWorksheet.Cells.Item($row, 1) = $group.Name
+                        $pivotWorksheet.Cells.Item($row, 2) = $group.Count
+                        $pivotWorksheet.Cells.Item($row, 3) = "$percentage%"
+                        $row++
+                    }
+                    $row += 2
+                    
+                    # Create Publisher breakdown table
+                    $pivotWorksheet.Cells.Item($row, 1) = "Top Publishers:"
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                    $pivotWorksheet.Cells.Item($row, 1).Font.Size = 12
+                    $row++
+                    
+                    $pivotWorksheet.Cells.Item($row, 1) = "Publisher"
+                    $pivotWorksheet.Cells.Item($row, 2) = "Count"
+                    $pivotWorksheet.Cells.Item($row, 3) = "Percentage"
+                    $pivotWorksheet.Range("A$row:C$row").Font.Bold = $true
+                    $pivotWorksheet.Range("A$row:C$row").Interior.Color = 15773696  # Light blue
+                    $row++
+                    
+                    $publisherGroups = $AllResults | Where-Object { $_.Publisher -and $_.Publisher -ne "" } | Group-Object Publisher | Sort-Object Count -Descending | Select-Object -First 15
+                    foreach ($group in $publisherGroups) {
+                        $percentage = [math]::Round(($group.Count / $AllResults.Count) * 100, 1)
+                        $pivotWorksheet.Cells.Item($row, 1) = $group.Name
+                        $pivotWorksheet.Cells.Item($row, 2) = $group.Count
+                        $pivotWorksheet.Cells.Item($row, 3) = "$percentage%"
+                        $row++
+                    }
                     
                     # Auto-fit columns
                     $pivotWorksheet.UsedRange.Columns.AutoFit()
                     
-                    Write-Status "Pivot table created successfully" "Green"
+                    Write-Status "Interactive analysis summary created successfully" "Green"
                 } catch {
-                    Write-Status "Pivot table creation failed, creating simple summary: $($_.Exception.Message)" "Yellow"
+                    Write-Status "Analysis summary creation failed: $($_.Exception.Message)" "Yellow"
                     
                     # Fallback to simple summary if pivot table fails
                     try {
