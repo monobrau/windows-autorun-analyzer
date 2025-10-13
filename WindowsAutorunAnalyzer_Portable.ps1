@@ -517,7 +517,7 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     
                     # Create pivot table using the data from the main worksheet
                     $dataRange = $ws.UsedRange
-                    $pivotCache = $excel.Workbook.PivotCaches.Add(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotCache = $excel.Workbook.PivotCaches.Create(1, $dataRange, 1)  # xlDatabase = 1
                     $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
                     
                     # Configure pivot table fields
