@@ -112,6 +112,20 @@ function Test-SuspiciousItem {
         $reason += "Suspicious file type in temp location"
     }
     
+    # Check for .lnk files (shortcuts) - can be used for persistence
+    if ($Command -match "\.lnk$" -or $Path -match "\.lnk$") {
+        if ($reason) { $reason += "; " }
+        $reason += "Shortcut file (.lnk) detected"
+        
+        # Check if it's in a suspicious location
+        if ($Command -match "temp|tmp|downloads|desktop|documents|public|appdata\\local\\temp|appdata\\roaming" -or 
+            $Path -match "temp|tmp|downloads|desktop|documents|public|appdata\\local\\temp|appdata\\roaming") {
+            $suspicious = $true
+            if ($reason) { $reason += "; " }
+            $reason += "Shortcut in suspicious location"
+        }
+    }
+    
     # Check for RMM (Remote Monitoring and Management) software
     $rmmPatterns = @(
         "teamviewer", "anydesk", "logmein", "gotomypc", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
@@ -154,6 +168,38 @@ function Test-SuspiciousItem {
         Reason = $reason
         RmmPublisherDetected = $rmmPublisherDetected
     }
+}
+
+# Function to get .lnk file target information
+function Get-LnkTarget {
+    param($LnkPath)
+    
+    $result = @{
+        TargetPath = ""
+        TargetArguments = ""
+        TargetWorkingDirectory = ""
+        IsLnkFile = $false
+    }
+    
+    try {
+        if (Test-Path $LnkPath -ErrorAction SilentlyContinue) {
+            $shell = New-Object -ComObject WScript.Shell
+            $shortcut = $shell.CreateShortcut($LnkPath)
+            
+            $result.IsLnkFile = $true
+            $result.TargetPath = $shortcut.TargetPath
+            $result.TargetArguments = $shortcut.Arguments
+            $result.TargetWorkingDirectory = $shortcut.WorkingDirectory
+            
+            # Clean up COM objects
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shortcut) | Out-Null
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+        }
+    } catch {
+        # LNK analysis failed
+    }
+    
+    return $result
 }
 
 # Function to get file information including publisher, hashes, and timestamp
@@ -315,6 +361,48 @@ function Get-RegistryAutoruns {
                             }
                         }
                         
+                        # Analyze .lnk files for additional information
+                        $lnkInfo = Get-LnkTarget -LnkPath $_.Value
+                        $targetFileInfo = @{
+                            Publisher = ""
+                            ImagePath = ""
+                            MD5Hash = ""
+                            SHA1Hash = ""
+                            SHA256Hash = ""
+                            Timestamp = ""
+                            VerifiedSigner = $false
+                        }
+                        
+                        if ($lnkInfo.IsLnkFile -and $lnkInfo.TargetPath) {
+                            $targetFileInfo = Get-FileInfo -FilePath $lnkInfo.TargetPath
+                            
+                            # Check if the target is suspicious
+                            if ($lnkInfo.TargetPath -match "temp|tmp|downloads|desktop|documents|public|appdata\\local\\temp|appdata\\roaming") {
+                                $suspicious.IsSuspicious = $true
+                                if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                                $suspicious.Reason += "LNK target in suspicious location: $($lnkInfo.TargetPath)"
+                            }
+                            
+                            # Check target for RMM software
+                            if ($targetFileInfo.Publisher -and -not $suspicious.IsSuspicious) {
+                                $rmmPublishers = @(
+                                    "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+                                    "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+                                    "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
+                                    "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                                )
+                                
+                                foreach ($publisher in $rmmPublishers) {
+                                    if ($targetFileInfo.Publisher -match $publisher) {
+                                        $suspicious.IsSuspicious = $true
+                                        if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                                        $suspicious.Reason += "LNK target RMM/Remote Desktop publisher detected: $($targetFileInfo.Publisher)"
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                        
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $autoruns += [PSCustomObject]@{
                             User = $Username
@@ -322,13 +410,16 @@ function Get-RegistryAutoruns {
                             Location = $regPath
                             Name = $_.Name
                             Command = $_.Value
-                            Publisher = $fileInfo.Publisher
-                            ImagePath = $fileInfo.ImagePath
-                            MD5Hash = $fileInfo.MD5Hash
-                            SHA1Hash = $fileInfo.SHA1Hash
-                            SHA256Hash = $fileInfo.SHA256Hash
-                            Timestamp = $fileInfo.Timestamp
-                            VerifiedSigner = $fileInfo.VerifiedSigner
+                            Publisher = if ($lnkInfo.IsLnkFile) { $targetFileInfo.Publisher } else { $fileInfo.Publisher }
+                            ImagePath = if ($lnkInfo.IsLnkFile) { $lnkInfo.TargetPath } else { $fileInfo.ImagePath }
+                            MD5Hash = if ($lnkInfo.IsLnkFile) { $targetFileInfo.MD5Hash } else { $fileInfo.MD5Hash }
+                            SHA1Hash = if ($lnkInfo.IsLnkFile) { $targetFileInfo.SHA1Hash } else { $fileInfo.SHA1Hash }
+                            SHA256Hash = if ($lnkInfo.IsLnkFile) { $targetFileInfo.SHA256Hash } else { $fileInfo.SHA256Hash }
+                            Timestamp = if ($lnkInfo.IsLnkFile) { $targetFileInfo.Timestamp } else { $fileInfo.Timestamp }
+                            VerifiedSigner = if ($lnkInfo.IsLnkFile) { $targetFileInfo.VerifiedSigner } else { $fileInfo.VerifiedSigner }
+                            LnkTarget = if ($lnkInfo.IsLnkFile) { $lnkInfo.TargetPath } else { "" }
+                            LnkArguments = if ($lnkInfo.IsLnkFile) { $lnkInfo.TargetArguments } else { "" }
+                            LnkWorkingDir = if ($lnkInfo.IsLnkFile) { $lnkInfo.TargetWorkingDirectory } else { "" }
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
@@ -943,8 +1034,8 @@ function Start-AutorunAnalysis {
             }
         } else {
             Write-Status "Basic Excel file creation failed, falling back to CSV" "Yellow"
-            $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
-            $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+    $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+    $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
             Write-Status "Results saved to CSV: $csvPath" "Yellow"
         }
     } catch {

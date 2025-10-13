@@ -54,6 +54,20 @@ function Test-SuspiciousItem {
         $reason += "Suspicious file type in temp location"
     }
     
+    # Check for .lnk files (shortcuts) - can be used for persistence
+    if ($Command -match "\.lnk$" -or $Path -match "\.lnk$") {
+        if ($reason) { $reason += "; " }
+        $reason += "Shortcut file (.lnk) detected"
+        
+        # Check if it's in a suspicious location
+        if ($Command -match "temp|tmp|downloads|desktop|documents|public|appdata\\local\\temp|appdata\\roaming" -or 
+            $Path -match "temp|tmp|downloads|desktop|documents|public|appdata\\local\\temp|appdata\\roaming") {
+            $suspicious = $true
+            if ($reason) { $reason += "; " }
+            $reason += "Shortcut in suspicious location"
+        }
+    }
+    
     # Check for RMM (Remote Monitoring and Management) software
     $rmmPatterns = @(
         "teamviewer", "anydesk", "logmein", "gotomypc", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
@@ -78,6 +92,38 @@ function Test-SuspiciousItem {
         IsBaseline = $isBaseline
         Reason = $reason
     }
+}
+
+# Function to get .lnk file target information
+function Get-LnkTarget {
+    param($LnkPath)
+    
+    $result = @{
+        TargetPath = ""
+        TargetArguments = ""
+        TargetWorkingDirectory = ""
+        IsLnkFile = $false
+    }
+    
+    try {
+        if (Test-Path $LnkPath -ErrorAction SilentlyContinue) {
+            $shell = New-Object -ComObject WScript.Shell
+            $shortcut = $shell.CreateShortcut($LnkPath)
+            
+            $result.IsLnkFile = $true
+            $result.TargetPath = $shortcut.TargetPath
+            $result.TargetArguments = $shortcut.Arguments
+            $result.TargetWorkingDirectory = $shortcut.WorkingDirectory
+            
+            # Clean up COM objects
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shortcut) | Out-Null
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+        }
+    } catch {
+        # LNK analysis failed
+    }
+    
+    return $result
 }
 
 # Function to get file information including publisher, hashes, and timestamp
