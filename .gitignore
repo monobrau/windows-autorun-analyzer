@@ -1,0 +1,40 @@
+# Windows Autorun Analyzer - Git Ignore
+
+# Output files
+*.csv
+*.xlsx
+AutorunAnalysis_*.csv
+AutorunAnalysis_*.xlsx
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# PowerShell
+*.ps1.bak
+*.ps1.old
+
+# Logs
+*.log
+logs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*_backup.*
+
+# Test files
+test_*
+*_test.*
