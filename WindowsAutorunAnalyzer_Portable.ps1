@@ -515,25 +515,39 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
                     $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
                     
-                    # Create pivot table using the data from the main worksheet
-                    $dataRange = $ws.UsedRange
-                    $pivotCache = $excel.Workbook.PivotCaches().Create(1, $dataRange, 1)  # xlDatabase = 1
-                    $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
-                    
-                    # Configure pivot table fields
-                    $pivotTable.PivotFields("Status").Orientation = 1  # xlRowField = 1
-                    $pivotTable.PivotFields("Type").Orientation = 1    # xlRowField = 1
-                    $pivotTable.PivotFields("User").Orientation = 1    # xlRowField = 1
-                    
-                    # Add count of items
-                    $pivotTable.PivotFields("Name").Orientation = 4    # xlDataField = 4
-                    $pivotTable.PivotFields("Count of Name").Function = -4112  # xlCount = -4112
-                    
-                    # Add Publisher analysis
-                    $pivotTable.PivotFields("Publisher").Orientation = 2  # xlColumnField = 2
-                    
-                    # Format the pivot table
-                    $pivotTable.TableStyle2 = "PivotStyleMedium2"
+                    # Create a simple pivot table using a different approach
+                    try {
+                        # Try using the Add method on the worksheet
+                        $pivotTable = $pivotWorksheet.PivotTables.Add($pivotWorksheet.Cells.Item(3, 1), $dataRange, "AutorunAnalysisPivot")
+                        
+                        # Configure pivot table fields
+                        $pivotTable.PivotFields("Status").Orientation = 1  # xlRowField = 1
+                        $pivotTable.PivotFields("Type").Orientation = 1    # xlRowField = 1
+                        $pivotTable.PivotFields("User").Orientation = 1    # xlRowField = 1
+                        
+                        # Add count of items
+                        $pivotTable.PivotFields("Name").Orientation = 4    # xlDataField = 4
+                        $pivotTable.PivotFields("Count of Name").Function = -4112  # xlCount = -4112
+                        
+                        # Add Publisher analysis
+                        $pivotTable.PivotFields("Publisher").Orientation = 2  # xlColumnField = 2
+                        
+                        # Format the pivot table
+                        $pivotTable.TableStyle2 = "PivotStyleMedium2"
+                    } catch {
+                        # If that fails, try the older method
+                        $pivotCache = $excel.Workbook.PivotCaches.Add(1, $dataRange, 1)
+                        $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
+                        
+                        # Configure pivot table fields
+                        $pivotTable.PivotFields("Status").Orientation = 1
+                        $pivotTable.PivotFields("Type").Orientation = 1
+                        $pivotTable.PivotFields("User").Orientation = 1
+                        $pivotTable.PivotFields("Name").Orientation = 4
+                        $pivotTable.PivotFields("Count of Name").Function = -4112
+                        $pivotTable.PivotFields("Publisher").Orientation = 2
+                        $pivotTable.TableStyle2 = "PivotStyleMedium2"
+                    }
                     
                     # Add summary statistics above the pivot table
                     $summaryRow = 1
