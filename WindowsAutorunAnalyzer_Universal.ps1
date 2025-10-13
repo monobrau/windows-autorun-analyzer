@@ -468,6 +468,7 @@ function Get-RegistryAutoruns {
                         
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $autoruns += [PSCustomObject]@{
+                            Status = $status
                             User = $Username
                             Type = "Registry"
                             Location = $regPath
@@ -486,7 +487,6 @@ function Get-RegistryAutoruns {
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
-                            Status = $status
                         }
                     }
                 }
@@ -537,6 +537,7 @@ function Get-StartupFolderAutoruns {
                     
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $autoruns += [PSCustomObject]@{
+                        Status = $status
                         User = $Username
                         Type = "Startup Folder"
                         Location = $startupPath
@@ -552,7 +553,6 @@ function Get-StartupFolderAutoruns {
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
-                        Status = $status
                     }
                 }
             }
@@ -599,6 +599,7 @@ function Get-ScheduledTasks {
                     
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $tasks += [PSCustomObject]@{
+                        Status = $status
                         User = "SYSTEM"
                         Type = "Scheduled Task"
                         Location = $task.TaskPath
@@ -615,7 +616,6 @@ function Get-ScheduledTasks {
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
-                        Status = $status
                     }
                 }
             }
@@ -662,6 +662,7 @@ function Get-Services {
                 
                 $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                 $services += [PSCustomObject]@{
+                    Status = $status
                     User = "SYSTEM"
                     Type = "Service"
                     Location = "Services"
@@ -679,7 +680,6 @@ function Get-Services {
                     IsSuspicious = $suspicious.IsSuspicious
                     IsBaseline = $suspicious.IsBaseline
                     Reason = $suspicious.Reason
-                    Status = $status
                 }
             }
         }
@@ -726,6 +726,7 @@ function Get-LogonScripts {
                         
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $scripts += [PSCustomObject]@{
+                            Status = $status
                             User = $profile.Username
                             Type = "Logon Script"
                             Location = $logonScriptPath
@@ -741,7 +742,6 @@ function Get-LogonScripts {
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
-                            Status = $status
                         }
                     }
                 }
@@ -857,23 +857,20 @@ function Start-AutorunAnalysis {
                 $row = 2  # Start from row 2 (skip header)
                 foreach ($result in $AllResults) {
                     if ($result.Status -eq "RED") {
-                        $worksheet.Cells.Item($row, 1).Interior.Color = 255  # Light Red
-                        $worksheet.Cells.Item($row, 2).Interior.Color = 255
-                        $worksheet.Cells.Item($row, 3).Interior.Color = 255
-                        $worksheet.Cells.Item($row, 4).Interior.Color = 255
-                        $worksheet.Cells.Item($row, 5).Interior.Color = 255
+                        # Color the entire row red
+                        for ($col = 1; $col -le 20; $col++) {
+                            $worksheet.Cells.Item($row, $col).Interior.Color = 255  # Light Red
+                        }
                     } elseif ($result.Status -eq "YELLOW") {
-                        $worksheet.Cells.Item($row, 1).Interior.Color = 65535  # Light Yellow
-                        $worksheet.Cells.Item($row, 2).Interior.Color = 65535
-                        $worksheet.Cells.Item($row, 3).Interior.Color = 65535
-                        $worksheet.Cells.Item($row, 4).Interior.Color = 65535
-                        $worksheet.Cells.Item($row, 5).Interior.Color = 65535
+                        # Color the entire row yellow
+                        for ($col = 1; $col -le 20; $col++) {
+                            $worksheet.Cells.Item($row, $col).Interior.Color = 65535  # Light Yellow
+                        }
                     } elseif ($result.Status -eq "WHITE") {
-                        $worksheet.Cells.Item($row, 1).Interior.Color = 16777215  # White
-                        $worksheet.Cells.Item($row, 2).Interior.Color = 16777215
-                        $worksheet.Cells.Item($row, 3).Interior.Color = 16777215
-                        $worksheet.Cells.Item($row, 4).Interior.Color = 16777215
-                        $worksheet.Cells.Item($row, 5).Interior.Color = 16777215
+                        # Color the entire row white
+                        for ($col = 1; $col -le 20; $col++) {
+                            $worksheet.Cells.Item($row, $col).Interior.Color = 16777215  # White
+                        }
                     }
                     $row++
                 }

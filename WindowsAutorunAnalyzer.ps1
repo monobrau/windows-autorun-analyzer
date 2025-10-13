@@ -320,6 +320,7 @@ function Get-RegistryAutoruns {
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $fileInfo = Get-FileInfo -FilePath $_.Value
                         $autoruns += [PSCustomObject]@{
+                            Status = $status
                             User = $Username
                             Type = "Registry"
                             Location = $regPath
@@ -335,7 +336,6 @@ function Get-RegistryAutoruns {
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
-                            Status = $status
                         }
                     }
                 }
@@ -366,6 +366,7 @@ function Get-StartupFolderAutoruns {
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $fileInfo = Get-FileInfo -FilePath $_.FullName
                     $autoruns += [PSCustomObject]@{
+                        Status = $status
                         User = $Username
                         Type = "Startup Folder"
                         Location = $startupPath
@@ -381,7 +382,6 @@ function Get-StartupFolderAutoruns {
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
-                        Status = $status
                     }
                 }
             }
@@ -409,6 +409,7 @@ function Get-ScheduledTasks {
                     $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $fileInfo = Get-FileInfo -FilePath $action.Execute
                     $tasks += [PSCustomObject]@{
+                        Status = $status
                         User = "SYSTEM"
                         Type = "Scheduled Task"
                         Location = $task.TaskPath
@@ -425,7 +426,6 @@ function Get-ScheduledTasks {
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
                         Reason = $suspicious.Reason
-                        Status = $status
                     }
                 }
             }
@@ -452,6 +452,7 @@ function Get-Services {
                 $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                 $fileInfo = Get-FileInfo -FilePath $service.PathName
                 $services += [PSCustomObject]@{
+                    Status = $status
                     User = "SYSTEM"
                     Type = "Service"
                     Location = "Services"
@@ -469,7 +470,6 @@ function Get-Services {
                     IsSuspicious = $suspicious.IsSuspicious
                     IsBaseline = $suspicious.IsBaseline
                     Reason = $suspicious.Reason
-                    Status = $status
                 }
             }
         }
@@ -503,6 +503,7 @@ function Get-LogonScripts {
                         $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $fileInfo = Get-FileInfo -FilePath $logonScript.UserInitMprLogonScript
                         $scripts += [PSCustomObject]@{
+                            Status = $status
                             User = $profile.Username
                             Type = "Logon Script"
                             Location = $logonScriptPath
@@ -518,7 +519,6 @@ function Get-LogonScripts {
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
                             Reason = $suspicious.Reason
-                            Status = $status
                         }
                     }
                 }
