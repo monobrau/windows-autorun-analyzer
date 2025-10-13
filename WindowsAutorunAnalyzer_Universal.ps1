@@ -538,71 +538,70 @@ function Start-AutorunAnalysis {
     # Try to use Export-Excel directly
     Write-Status "Attempting Excel export..." "Cyan"
     try {
-        try {
-            # Create Excel file with color coding
-            Write-Status "Creating Excel file with color coding..." "Cyan"
+        # Create Excel file with color coding
+        Write-Status "Creating Excel file with color coding..." "Cyan"
+        
+        # First try to create the Excel file without PassThru
+        Write-Status "Creating basic Excel file..." "Cyan"
+        $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2
+        
+        # Check if file was created
+        if (Test-Path $OutputPath) {
+            Write-Status "Basic Excel file created successfully" "Green"
             
-            # First try to create the Excel file without PassThru
-            Write-Status "Creating basic Excel file..." "Cyan"
-            $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2
-            
-            # Check if file was created
-            if (Test-Path $OutputPath) {
-                Write-Status "Basic Excel file created successfully" "Green"
+            # Now try to get the Excel object for color coding
+            try {
+                Write-Status "Opening Excel file for color coding..." "Cyan"
+                $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
                 
-                # Now try to get the Excel object for color coding
-                try {
-                    Write-Status "Opening Excel file for color coding..." "Cyan"
-                    $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
+                # Check if Excel object was created successfully
+                if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
+                    # Get the worksheet
+                    $ws = $excel.Workbook.Worksheets[0]
+                
+                    # Add color coding
+                    $row = 2  # Start from row 2 (skip header)
+                    foreach ($result in $AllResults) {
+                        if ($result.Status -eq "RED") {
+                            $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
+                            $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
+                            $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
+                            $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
+                            $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
+                        } elseif ($result.Status -eq "YELLOW") {
+                            $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
+                            $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
+                            $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
+                            $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
+                            $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
+                        } elseif ($result.Status -eq "WHITE") {
+                            $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
+                            $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
+                            $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
+                            $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
+                            $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
+                        }
+                        $row++
+                    }
                     
-                    # Check if Excel object was created successfully
-                    if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
-                # Get the worksheet
-                $ws = $excel.Workbook.Worksheets[0]
-            
-                # Add color coding
-                $row = 2  # Start from row 2 (skip header)
-                foreach ($result in $AllResults) {
-                    if ($result.Status -eq "RED") {
-                        $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
-                        $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
-                        $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
-                        $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
-                        $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
-                    } elseif ($result.Status -eq "YELLOW") {
-                        $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
-                        $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
-                        $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
-                        $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
-                        $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
-                    } elseif ($result.Status -eq "WHITE") {
-                        $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
-                        $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
-                        $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
-                        $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
-                        $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
-                    }
-                    $row++
-                }
-                
-                        # Save and close
-                        $excel.Save()
-                        $excel.Dispose()
-                        Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
-                    } else {
-                        Write-Status "Excel object creation failed, but basic Excel file was created" "Yellow"
-                        Write-Status "Excel file saved without color coding: $OutputPath" "Green"
-                    }
-                } catch {
-                    Write-Status "Color coding failed, but basic Excel file was created: $($_.Exception.Message)" "Yellow"
+                    # Save and close
+                    $excel.Save()
+                    $excel.Dispose()
+                    Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
+                } else {
+                    Write-Status "Excel object creation failed, but basic Excel file was created" "Yellow"
                     Write-Status "Excel file saved without color coding: $OutputPath" "Green"
                 }
-            } else {
-                Write-Status "Basic Excel file creation failed, falling back to CSV" "Yellow"
-                $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
-                $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
-                Write-Status "Results saved to CSV: $csvPath" "Yellow"
+            } catch {
+                Write-Status "Color coding failed, but basic Excel file was created: $($_.Exception.Message)" "Yellow"
+                Write-Status "Excel file saved without color coding: $OutputPath" "Green"
             }
+        } else {
+            Write-Status "Basic Excel file creation failed, falling back to CSV" "Yellow"
+            $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+            $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+            Write-Status "Results saved to CSV: $csvPath" "Yellow"
+        }
     } catch {
         Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
         $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
