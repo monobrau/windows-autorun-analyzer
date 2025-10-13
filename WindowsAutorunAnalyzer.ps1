@@ -153,6 +153,25 @@ function Test-SuspiciousItem {
         $reason += "Suspicious file type in temp location"
     }
     
+    # Check for RMM (Remote Monitoring and Management) software
+    $rmmPatterns = @(
+        "teamviewer", "anydesk", "logmein", "gotomypc", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+        "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+        "screenconnect", "bomgar", "beyondtrust", "remoteutilities", "ultravnc", "tightvnc", "realvnc",
+        "chrome remote", "microsoft remote desktop", "rdp", "remote desktop", "vnc", "radmin", "ammyy",
+        "supremo", "rustdesk", "parsec", "chrome-remote-desktop", "remotix", "nomachine", "noip",
+        "dynu", "no-ip", "duckdns", "freedns", "cloudflare", "ngrok", "tunnel", "proxy", "vpn"
+    )
+    
+    foreach ($pattern in $rmmPatterns) {
+        if ($Command -match $pattern -or $Path -match $pattern) {
+            $suspicious = $true
+            if ($reason) { $reason += "; " }
+            $reason += "RMM/Remote Desktop software detected"
+            break
+        }
+    }
+    
     return @{
         IsSuspicious = $suspicious
         IsBaseline = $isBaseline

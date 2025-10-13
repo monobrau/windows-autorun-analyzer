@@ -331,7 +331,7 @@ function Get-RegistryAutoruns {
                                 "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
                                 "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
                                 "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
-                                "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                                "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare", "screenconnect"
                             )
                             
                             foreach ($publisher in $rmmPublishers) {
@@ -586,7 +586,7 @@ function Get-LogonScripts {
                                 "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
                                 "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
                                 "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
-                                "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                                "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare", "screenconnect"
                             )
                             
                             foreach ($publisher in $rmmPublishers) {
