@@ -535,202 +535,59 @@ function Start-AutorunAnalysis {
         }
     }
     
-    # Try to use Export-Excel directly
-    Write-Status "Attempting Excel export..." "Cyan"
-    try {
-        # Create Excel file with color coding
-        Write-Status "Creating Excel file with color coding..." "Cyan"
-        
-        # First try to create the Excel file without PassThru
-        Write-Status "Creating basic Excel file..." "Cyan"
-        $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2
-        
-        # Check if file was created
-        if (Test-Path $OutputPath) {
-            Write-Status "Basic Excel file created successfully" "Green"
+    # Check if ImportExcel module is available
+    Write-Status "Checking for Export-Excel command..." "Cyan"
+    $exportExcelCmd = Get-Command Export-Excel -ErrorAction SilentlyContinue
+    if ($exportExcelCmd) {
+        Write-Status "Export-Excel command found: $($exportExcelCmd.Source)" "Green"
+        try {
+            # Create Excel file with color coding
+            Write-Status "Creating Excel file with color coding..." "Cyan"
+            $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
             
-            # Now try to add color coding using COM object approach
-            try {
-                Write-Status "Adding color coding using COM object..." "Cyan"
-                
-                # Create Excel COM object
-                $excel = New-Object -ComObject Excel.Application
-                $excel.Visible = $false
-                $excel.DisplayAlerts = $false
-                
-                # Open the existing Excel file
-                $workbook = $excel.Workbooks.Open($OutputPath)
-                $worksheet = $workbook.Worksheets.Item(1)
-                
-                # Add color coding
-                $row = 2  # Start from row 2 (skip header)
-                foreach ($result in $AllResults) {
-                    if ($result.Status -eq "RED") {
-                        $worksheet.Cells.Item($row, 1).Interior.Color = 255  # Light Red
-                        $worksheet.Cells.Item($row, 2).Interior.Color = 255
-                        $worksheet.Cells.Item($row, 3).Interior.Color = 255
-                        $worksheet.Cells.Item($row, 4).Interior.Color = 255
-                        $worksheet.Cells.Item($row, 5).Interior.Color = 255
-                    } elseif ($result.Status -eq "YELLOW") {
-                        $worksheet.Cells.Item($row, 1).Interior.Color = 65535  # Light Yellow
-                        $worksheet.Cells.Item($row, 2).Interior.Color = 65535
-                        $worksheet.Cells.Item($row, 3).Interior.Color = 65535
-                        $worksheet.Cells.Item($row, 4).Interior.Color = 65535
-                        $worksheet.Cells.Item($row, 5).Interior.Color = 65535
-                    } elseif ($result.Status -eq "WHITE") {
-                        $worksheet.Cells.Item($row, 1).Interior.Color = 16777215  # White
-                        $worksheet.Cells.Item($row, 2).Interior.Color = 16777215
-                        $worksheet.Cells.Item($row, 3).Interior.Color = 16777215
-                        $worksheet.Cells.Item($row, 4).Interior.Color = 16777215
-                        $worksheet.Cells.Item($row, 5).Interior.Color = 16777215
-                    }
-                    $row++
+            # Get the worksheet
+            $ws = $excel.Workbook.Worksheets[0]
+            
+            # Add color coding
+            $row = 2  # Start from row 2 (skip header)
+            foreach ($result in $AllResults) {
+                if ($result.Status -eq "RED") {
+                    $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
+                    $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
+                } elseif ($result.Status -eq "YELLOW") {
+                    $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
+                    $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
+                } elseif ($result.Status -eq "WHITE") {
+                    $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
+                    $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
                 }
-                
-                # Create Pivot Table for better analysis
-                Write-Status "Creating pivot table for analysis..." "Cyan"
-                try {
-                    # Add a new worksheet for pivot table
-                    $pivotWorksheet = $workbook.Worksheets.Add()
-                    $pivotWorksheet.Name = "Analysis Summary"
-                    
-                    # Add title
-                    $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
-                    $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
-                    $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
-                    
-                    # Create pivot table using the data from the main worksheet
-                    $dataRange = $worksheet.UsedRange
-                    $pivotCache = $workbook.PivotCaches.Create(1, $dataRange, 1)  # xlDatabase = 1
-                    $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
-                    
-                    # Configure pivot table fields
-                    $pivotTable.PivotFields("Status").Orientation = 1  # xlRowField = 1
-                    $pivotTable.PivotFields("Type").Orientation = 1    # xlRowField = 1
-                    $pivotTable.PivotFields("User").Orientation = 1    # xlRowField = 1
-                    
-                    # Add count of items
-                    $pivotTable.PivotFields("Name").Orientation = 4    # xlDataField = 4
-                    $pivotTable.PivotFields("Count of Name").Function = -4112  # xlCount = -4112
-                    
-                    # Add Publisher analysis
-                    $pivotTable.PivotFields("Publisher").Orientation = 2  # xlColumnField = 2
-                    
-                    # Format the pivot table
-                    $pivotTable.TableStyle2 = "PivotStyleMedium2"
-                    
-                    # Add summary statistics above the pivot table
-                    $summaryRow = 1
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Total Items: $($AllResults.Count)"
-                    $summaryRow++
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Suspicious (RED): $(($AllResults | Where-Object { $_.Status -eq 'RED' }).Count)"
-                    $summaryRow++
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "After-market (YELLOW): $(($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count)"
-                    $summaryRow++
-                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Baseline (WHITE): $(($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count)"
-                    
-                    # Auto-fit columns
-                    $pivotWorksheet.UsedRange.Columns.AutoFit()
-                    
-                    Write-Status "Pivot table created successfully" "Green"
-                } catch {
-                    Write-Status "Pivot table creation failed, creating simple summary: $($_.Exception.Message)" "Yellow"
-                    
-                    # Fallback to simple summary if pivot table fails
-                    try {
-                        $pivotWorksheet = $workbook.Worksheets.Add()
-                        $pivotWorksheet.Name = "Analysis Summary"
-                        
-                        # Add title
-                        $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
-                        $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
-                        $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
-                        
-                        # Add summary statistics
-                        $row = 3
-                        $pivotWorksheet.Cells.Item($row, 1) = "Total Items:"
-                        $pivotWorksheet.Cells.Item($row, 2) = $AllResults.Count
-                        $row++
-                        
-                        $pivotWorksheet.Cells.Item($row, 1) = "Suspicious (RED):"
-                        $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'RED' }).Count
-                        $row++
-                        
-                        $pivotWorksheet.Cells.Item($row, 1) = "After-market (YELLOW):"
-                        $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count
-                        $row++
-                        
-                        $pivotWorksheet.Cells.Item($row, 1) = "Baseline (WHITE):"
-                        $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count
-                        $row += 2
-                        
-                        # Add breakdown by type
-                        $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by Type:"
-                        $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
-                        $row++
-                        
-                        $typeGroups = $AllResults | Group-Object Type | Sort-Object Count -Descending
-                        foreach ($group in $typeGroups) {
-                            $pivotWorksheet.Cells.Item($row, 1) = $group.Name
-                            $pivotWorksheet.Cells.Item($row, 2) = $group.Count
-                            $row++
-                        }
-                        $row += 2
-                        
-                        # Add breakdown by user
-                        $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by User:"
-                        $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
-                        $row++
-                        
-                        $userGroups = $AllResults | Group-Object User | Sort-Object Count -Descending
-                        foreach ($group in $userGroups) {
-                            $pivotWorksheet.Cells.Item($row, 1) = $group.Name
-                            $pivotWorksheet.Cells.Item($row, 2) = $group.Count
-                            $row++
-                        }
-                        
-                        # Auto-fit columns
-                        $pivotWorksheet.UsedRange.Columns.AutoFit()
-                        
-                        Write-Status "Simple summary created successfully" "Green"
-                    } catch {
-                        Write-Status "Summary creation also failed: $($_.Exception.Message)" "Red"
-                    }
-                }
-                
-                # Save and close
-                $workbook.Save()
-                $workbook.Close()
-                $excel.Quit()
-                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                
-                Write-Status "Excel file with color coding created successfully: $OutputPath" "Green"
-            } catch {
-                Write-Status "Color coding failed, but basic Excel file was created: $($_.Exception.Message)" "Yellow"
-                Write-Status "Excel file saved without color coding: $OutputPath" "Green"
-                
-                # Clean up COM objects if they exist
-                try {
-                    if ($workbook) { $workbook.Close() }
-                    if ($excel) { 
-                        $excel.Quit()
-                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                    }
-                } catch {
-                    # Ignore cleanup errors
-                }
+                $row++
             }
-        } else {
-            Write-Status "Basic Excel file creation failed, falling back to CSV" "Yellow"
+            
+            # Save and close
+            $excel.Save()
+            $excel.Dispose()
+            Write-Status "Excel file created successfully: $OutputPath" "Green"
+        } catch {
+            Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
             $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
             $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
             Write-Status "Results saved to CSV: $csvPath" "Yellow"
         }
-    } catch {
-        Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
+    } else {
+        # Fallback to CSV
         $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
         $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
-        Write-Status "Results saved to CSV: $csvPath" "Yellow"
+        Write-Status "ImportExcel module not available, using CSV: $csvPath" "Yellow"
     }
     
     # Calculate counts
@@ -874,3 +731,4 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
 }
 
 Write-Status "Universal script completed!" "Cyan"
+

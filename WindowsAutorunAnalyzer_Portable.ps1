@@ -503,6 +503,117 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     $row++
                 }
                 
+                # Create Pivot Table for better analysis
+                Write-Status "Creating pivot table for analysis..." "Cyan"
+                try {
+                    # Add a new worksheet for pivot table
+                    $pivotWorksheet = $excel.Workbook.Worksheets.Add()
+                    $pivotWorksheet.Name = "Analysis Summary"
+                    
+                    # Add title
+                    $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
+                    $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
+                    $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
+                    
+                    # Create pivot table using the data from the main worksheet
+                    $dataRange = $ws.UsedRange
+                    $pivotCache = $excel.Workbook.PivotCaches.Create(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
+                    
+                    # Configure pivot table fields
+                    $pivotTable.PivotFields("Status").Orientation = 1  # xlRowField = 1
+                    $pivotTable.PivotFields("Type").Orientation = 1    # xlRowField = 1
+                    $pivotTable.PivotFields("User").Orientation = 1    # xlRowField = 1
+                    
+                    # Add count of items
+                    $pivotTable.PivotFields("Name").Orientation = 4    # xlDataField = 4
+                    $pivotTable.PivotFields("Count of Name").Function = -4112  # xlCount = -4112
+                    
+                    # Add Publisher analysis
+                    $pivotTable.PivotFields("Publisher").Orientation = 2  # xlColumnField = 2
+                    
+                    # Format the pivot table
+                    $pivotTable.TableStyle2 = "PivotStyleMedium2"
+                    
+                    # Add summary statistics above the pivot table
+                    $summaryRow = 1
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Total Items: $($AllResults.Count)"
+                    $summaryRow++
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Suspicious (RED): $(($AllResults | Where-Object { $_.Status -eq 'RED' }).Count)"
+                    $summaryRow++
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "After-market (YELLOW): $(($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count)"
+                    $summaryRow++
+                    $pivotWorksheet.Cells.Item($summaryRow, 3) = "Baseline (WHITE): $(($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count)"
+                    
+                    # Auto-fit columns
+                    $pivotWorksheet.UsedRange.Columns.AutoFit()
+                    
+                    Write-Status "Pivot table created successfully" "Green"
+                } catch {
+                    Write-Status "Pivot table creation failed, creating simple summary: $($_.Exception.Message)" "Yellow"
+                    
+                    # Fallback to simple summary if pivot table fails
+                    try {
+                        $pivotWorksheet = $excel.Workbook.Worksheets.Add()
+                        $pivotWorksheet.Name = "Analysis Summary"
+                        
+                        # Add title
+                        $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
+                        $pivotWorksheet.Cells.Item(1, 1).Font.Bold = $true
+                        $pivotWorksheet.Cells.Item(1, 1).Font.Size = 14
+                        
+                        # Add summary statistics
+                        $row = 3
+                        $pivotWorksheet.Cells.Item($row, 1) = "Total Items:"
+                        $pivotWorksheet.Cells.Item($row, 2) = $AllResults.Count
+                        $row++
+                        
+                        $pivotWorksheet.Cells.Item($row, 1) = "Suspicious (RED):"
+                        $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'RED' }).Count
+                        $row++
+                        
+                        $pivotWorksheet.Cells.Item($row, 1) = "After-market (YELLOW):"
+                        $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'YELLOW' }).Count
+                        $row++
+                        
+                        $pivotWorksheet.Cells.Item($row, 1) = "Baseline (WHITE):"
+                        $pivotWorksheet.Cells.Item($row, 2) = ($AllResults | Where-Object { $_.Status -eq 'WHITE' }).Count
+                        $row += 2
+                        
+                        # Add breakdown by type
+                        $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by Type:"
+                        $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                        $row++
+                        
+                        $typeGroups = $AllResults | Group-Object Type | Sort-Object Count -Descending
+                        foreach ($group in $typeGroups) {
+                            $pivotWorksheet.Cells.Item($row, 1) = $group.Name
+                            $pivotWorksheet.Cells.Item($row, 2) = $group.Count
+                            $row++
+                        }
+                        $row += 2
+                        
+                        # Add breakdown by user
+                        $pivotWorksheet.Cells.Item($row, 1) = "Breakdown by User:"
+                        $pivotWorksheet.Cells.Item($row, 1).Font.Bold = $true
+                        $row++
+                        
+                        $userGroups = $AllResults | Group-Object User | Sort-Object Count -Descending
+                        foreach ($group in $userGroups) {
+                            $pivotWorksheet.Cells.Item($row, 1) = $group.Name
+                            $pivotWorksheet.Cells.Item($row, 2) = $group.Count
+                            $row++
+                        }
+                        
+                        # Auto-fit columns
+                        $pivotWorksheet.UsedRange.Columns.AutoFit()
+                        
+                        Write-Status "Simple summary created successfully" "Green"
+                    } catch {
+                        Write-Status "Summary creation also failed: $($_.Exception.Message)" "Red"
+                    }
+                }
+                
                         # Save and close
                         $excel.Save()
                         $excel.Dispose()
