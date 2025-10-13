@@ -54,6 +54,25 @@ function Test-SuspiciousItem {
         $reason += "Suspicious file type in temp location"
     }
     
+    # Check for RMM (Remote Monitoring and Management) software
+    $rmmPatterns = @(
+        "teamviewer", "anydesk", "logmein", "gotomypc", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+        "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+        "screenconnect", "bomgar", "beyondtrust", "remoteutilities", "ultravnc", "tightvnc", "realvnc",
+        "chrome remote", "microsoft remote desktop", "rdp", "remote desktop", "vnc", "radmin", "ammyy",
+        "supremo", "rustdesk", "parsec", "chrome-remote-desktop", "remotix", "nomachine", "noip",
+        "dynu", "no-ip", "duckdns", "freedns", "cloudflare", "ngrok", "tunnel", "proxy", "vpn"
+    )
+    
+    foreach ($pattern in $rmmPatterns) {
+        if ($Command -match $pattern -or $Path -match $pattern) {
+            $suspicious = $true
+            if ($reason) { $reason += "; " }
+            $reason += "RMM/Remote Desktop software detected"
+            break
+        }
+    }
+    
     return @{
         IsSuspicious = $suspicious
         IsBaseline = $isBaseline
@@ -199,8 +218,28 @@ function Get-RegistryAutoruns {
                         $_.Value -ne "" 
                     } | ForEach-Object {
                         $suspicious = Test-SuspiciousItem -Path $_.Value -Command $_.Value
-                        $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $fileInfo = Get-FileInfo -FilePath $_.Value
+                        
+                        # Additional RMM detection based on publisher
+                        if ($fileInfo.Publisher -and -not $suspicious.IsSuspicious) {
+                            $rmmPublishers = @(
+                                "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+                                "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+                                "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
+                                "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                            )
+                            
+                            foreach ($publisher in $rmmPublishers) {
+                                if ($fileInfo.Publisher -match $publisher) {
+                                    $suspicious.IsSuspicious = $true
+                                    if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                                    $suspicious.Reason += "RMM/Remote Desktop publisher detected: $($fileInfo.Publisher)"
+                                    break
+                                }
+                            }
+                        }
+                        
+                        $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $autoruns += [PSCustomObject]@{
                             User = $Username
                             Type = "Registry"
@@ -245,8 +284,28 @@ function Get-StartupFolderAutoruns {
             if (Test-Path $startupPath -ErrorAction SilentlyContinue) {
                 Get-ChildItem -Path $startupPath -File -ErrorAction SilentlyContinue | ForEach-Object {
                     $suspicious = Test-SuspiciousItem -Path $_.FullName -Command $_.FullName
-                    $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $fileInfo = Get-FileInfo -FilePath $_.FullName
+                    
+                    # Additional RMM detection based on publisher
+                    if ($fileInfo.Publisher -and -not $suspicious.IsSuspicious) {
+                        $rmmPublishers = @(
+                            "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+                            "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+                            "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
+                            "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                        )
+                        
+                        foreach ($publisher in $rmmPublishers) {
+                            if ($fileInfo.Publisher -match $publisher) {
+                                $suspicious.IsSuspicious = $true
+                                if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                                $suspicious.Reason += "RMM/Remote Desktop publisher detected: $($fileInfo.Publisher)"
+                                break
+                            }
+                        }
+                    }
+                    
+                    $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $autoruns += [PSCustomObject]@{
                         User = $Username
                         Type = "Startup Folder"
@@ -287,8 +346,28 @@ function Get-ScheduledTasks {
             foreach ($action in $taskActions) {
                 if ($action.Execute) {
                     $suspicious = Test-SuspiciousItem -Path $action.Execute -Command $action.Execute
-                    $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $fileInfo = Get-FileInfo -FilePath $action.Execute
+                    
+                    # Additional RMM detection based on publisher
+                    if ($fileInfo.Publisher -and -not $suspicious.IsSuspicious) {
+                        $rmmPublishers = @(
+                            "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+                            "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+                            "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
+                            "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                        )
+                        
+                        foreach ($publisher in $rmmPublishers) {
+                            if ($fileInfo.Publisher -match $publisher) {
+                                $suspicious.IsSuspicious = $true
+                                if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                                $suspicious.Reason += "RMM/Remote Desktop publisher detected: $($fileInfo.Publisher)"
+                                break
+                            }
+                        }
+                    }
+                    
+                    $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                     $tasks += [PSCustomObject]@{
                         User = "SYSTEM"
                         Type = "Scheduled Task"
@@ -330,8 +409,28 @@ function Get-Services {
         foreach ($service in $allServices) {
             if ($service.PathName) {
                 $suspicious = Test-SuspiciousItem -Path $service.PathName -Command $service.PathName
-                $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                 $fileInfo = Get-FileInfo -FilePath $service.PathName
+                
+                # Additional RMM detection based on publisher
+                if ($fileInfo.Publisher -and -not $suspicious.IsSuspicious) {
+                    $rmmPublishers = @(
+                        "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+                        "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+                        "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
+                        "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                    )
+                    
+                    foreach ($publisher in $rmmPublishers) {
+                        if ($fileInfo.Publisher -match $publisher) {
+                            $suspicious.IsSuspicious = $true
+                            if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                            $suspicious.Reason += "RMM/Remote Desktop publisher detected: $($fileInfo.Publisher)"
+                            break
+                        }
+                    }
+                }
+                
+                $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                 $services += [PSCustomObject]@{
                     User = "SYSTEM"
                     Type = "Service"
@@ -374,8 +473,28 @@ function Get-LogonScripts {
                     $logonScript = Get-ItemProperty -Path $logonScriptPath -Name "UserInitMprLogonScript" -ErrorAction SilentlyContinue
                     if ($logonScript -and $logonScript.UserInitMprLogonScript) {
                         $suspicious = Test-SuspiciousItem -Path $logonScript.UserInitMprLogonScript -Command $logonScript.UserInitMprLogonScript
-                        $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $fileInfo = Get-FileInfo -FilePath $logonScript.UserInitMprLogonScript
+                        
+                        # Additional RMM detection based on publisher
+                        if ($fileInfo.Publisher -and -not $suspicious.IsSuspicious) {
+                            $rmmPublishers = @(
+                                "teamviewer", "anydesk", "logmein", "splashtop", "connectwise", "kaseya", "n-able", "continuum",
+                                "solarwinds", "pulseway", "aem", "ninja", "atera", "superops", "syncro", "barracuda", "datto",
+                                "beyondtrust", "ultravnc", "tightvnc", "realvnc", "radmin", "ammyy", "supremo", "rustdesk",
+                                "parsec", "remotix", "nomachine", "noip", "dynu", "duckdns", "freedns", "cloudflare"
+                            )
+                            
+                            foreach ($publisher in $rmmPublishers) {
+                                if ($fileInfo.Publisher -match $publisher) {
+                                    $suspicious.IsSuspicious = $true
+                                    if ($suspicious.Reason) { $suspicious.Reason += "; " }
+                                    $suspicious.Reason += "RMM/Remote Desktop publisher detected: $($fileInfo.Publisher)"
+                                    break
+                                }
+                            }
+                        }
+                        
+                        $status = if ($suspicious.IsSuspicious) { "RED" } elseif ($suspicious.IsBaseline) { "WHITE" } else { "YELLOW" }
                         $scripts += [PSCustomObject]@{
                             User = $profile.Username
                             Type = "Logon Script"
