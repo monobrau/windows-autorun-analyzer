@@ -27,7 +27,54 @@ function Test-SuspiciousItem {
         $Command -match "C:\\Windows\\System32\\" -or
         $Command -match "C:\\Windows\\SysWOW64\\" -or
         $Command -match "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\" -or
-        $Command -match "C:\\Users\\.*\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\") {
+        $Command -match "C:\\Users\\.*\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\" -or
+        $Command -match "^%windir%\\" -or
+        $Command -match "^%SystemRoot%\\" -or
+        $Command -match "^%windir%\\system32\\" -or
+        $Command -match "^%SystemRoot%\\System32\\" -or
+        $Command -match "explorer\\.exe" -or
+        $Command -match "userinit\\.exe" -or
+        $Command -match "sihost\\.exe" -or
+        $Command -match "ShellAppRuntime\\.exe" -or
+        $Command -match "SystemPropertiesPerformance\\.exe" -or
+        $Command -match "rundll32\\.exe" -or
+        $Command -match "compattelrunner\\.exe" -or
+        $Command -match "sc\\.exe" -or
+        $Command -match "sdbinst\\.exe" -or
+        $Command -match "AppHostRegistrationVerifier\\.exe" -or
+        $Command -match "dstokenclean\\.exe" -or
+        $Command -match "UCPDMgr\\.exe" -or
+        $Command -match "bcdboot\\.exe" -or
+        $Command -match "wsqmcons\\.exe" -or
+        $Command -match "defrag\\.exe" -or
+        $Command -match "devicecensus\\.exe" -or
+        $Command -match "UCConfigTask\\.exe" -or
+        $Command -match "directxdatabaseupdater\\.exe" -or
+        $Command -match "dxgiadaptercache\\.exe" -or
+        $Command -match "cleanmgr\\.exe" -or
+        $Command -match "disksnapshot\\.exe" -or
+        $Command -match "BthUdTask\\.exe" -or
+        $Command -match "Wscript\\.exe" -or
+        $Command -match "OneDriveStandaloneUpdater\\.exe" -or
+        $Command -match "OneDriveLauncher\\.exe" -or
+        $Command -match "OneDrive\\.exe" -or
+        $Command -match "AdobeARM\\.exe" -or
+        $Command -match "BraveUpdate\\.exe" -or
+        $Command -match "MicrosoftEdgeUpdate\\.exe" -or
+        $Command -match "CheckStatus\\.bat" -or
+        $Command -match "IntelSoftwareAssetManagerService\\.exe" -or
+        $Command -match "iumsvc\\.exe" -or
+        $Command -match "default-browser-agent\\.exe" -or
+        $Command -match "updater\\.exe" -or
+        $Command -match "ActionsServer\\.exe" -or
+        $Command -match "OfficeC2RClient\\.exe" -or
+        $Command -match "opushutil\\.exe" -or
+        $Command -match "sdxhelper\\.exe" -or
+        $Command -match "operfmon\\.exe" -or
+        $Command -match "officesvcmgr\\.exe" -or
+        $Command -match "BackgroundDownload\\.exe" -or
+        $Command -match "SupportAssistInstaller\\.exe" -or
+        $Command -match "Zoom\\.exe") {
         $isBaseline = $true
     }
     
