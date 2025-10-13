@@ -456,43 +456,51 @@ try {
 
 # Check if ImportExcel module is available
 if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
-    try {
-        # Create Excel file with color coding
-        Write-Status "Creating Excel file with color coding..." "Cyan"
-        $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
+        try {
+            # Create Excel file with color coding
+            Write-Status "Creating Excel file with color coding..." "Cyan"
+            $excel = $AllResults | Export-Excel -Path $OutputPath -AutoSize -TableStyle Medium2 -PassThru
+            
+            # Check if Excel object was created successfully
+            if ($excel -and $excel.Workbook -and $excel.Workbook.Worksheets) {
+                # Get the worksheet
+                $ws = $excel.Workbook.Worksheets[0]
         
-        # Get the worksheet
-        $ws = $excel.Workbook.Worksheets[0]
-        
-        # Add color coding
-        $row = 2  # Start from row 2 (skip header)
-        foreach ($result in $AllResults) {
-            if ($result.Status -eq "RED") {
-                $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
-                $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
-                $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
-                $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
-                $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
-            } elseif ($result.Status -eq "YELLOW") {
-                $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
-                $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
-                $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
-                $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
-                $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
-            } elseif ($result.Status -eq "WHITE") {
-                $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
-                $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
-                $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
-                $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
-                $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
+                # Add color coding
+                $row = 2  # Start from row 2 (skip header)
+                foreach ($result in $AllResults) {
+                    if ($result.Status -eq "RED") {
+                        $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightCoral
+                        $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightCoral
+                        $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightCoral
+                        $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightCoral
+                        $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightCoral
+                    } elseif ($result.Status -eq "YELLOW") {
+                        $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::LightYellow
+                        $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::LightYellow
+                        $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::LightYellow
+                        $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::LightYellow
+                        $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::LightYellow
+                    } elseif ($result.Status -eq "WHITE") {
+                        $ws.Cells.Item($row, 1).Interior.Color = [System.Drawing.Color]::White
+                        $ws.Cells.Item($row, 2).Interior.Color = [System.Drawing.Color]::White
+                        $ws.Cells.Item($row, 3).Interior.Color = [System.Drawing.Color]::White
+                        $ws.Cells.Item($row, 4).Interior.Color = [System.Drawing.Color]::White
+                        $ws.Cells.Item($row, 5).Interior.Color = [System.Drawing.Color]::White
+                    }
+                    $row++
+                }
+                
+                # Save and close
+                $excel.Save()
+                $excel.Dispose()
+                Write-Status "Excel file created successfully: $OutputPath" "Green"
+            } else {
+                Write-Status "Excel object creation failed, falling back to CSV" "Yellow"
+                $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+                $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+                Write-Status "Results saved to CSV: $csvPath" "Yellow"
             }
-            $row++
-        }
-        
-        # Save and close
-        $excel.Save()
-        $excel.Dispose()
-        Write-Status "Excel file created successfully: $OutputPath" "Green"
     } catch {
         Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
         $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
