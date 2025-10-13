@@ -74,7 +74,19 @@ function Test-SuspiciousItem {
         $Command -match "officesvcmgr\\.exe" -or
         $Command -match "BackgroundDownload\\.exe" -or
         $Command -match "SupportAssistInstaller\\.exe" -or
-        $Command -match "Zoom\\.exe") {
+        $Command -match "Zoom\\.exe" -or
+        # Check for Windows registry entries that should be baseline
+        $Command -match "^[0-9]+$" -or  # Numeric values (like 1, 0, 10, etc.)
+        $Command -match "^[0-9]+\\.[0-9]+E\\+[0-9]+$" -or  # Scientific notation (like 9.51561E+11)
+        $Command -match "^[A-F0-9\\-]+$" -or  # GUIDs (like {A520A1A4-1780-4FF6-BD18-167343C5AF16})
+        $Command -match "^no$" -or  # "no" values
+        $Command -match "^yes$" -or  # "yes" values
+        $Command -match "^0 0 0$" -or  # RGB values
+        $Command -match "^2147484203$" -or  # Specific Windows values
+        $Command -match "^5$" -or  # Common Windows numeric values
+        $Command -match "^10$" -or
+        $Command -match "^1$" -or
+        $Command -match "^0$") {
         $isBaseline = $true
     }
     
