@@ -506,6 +506,14 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                 # Create Pivot Table for better analysis
                 Write-Status "Creating pivot table for analysis..." "Cyan"
                 try {
+                    # Check if Analysis Summary already exists and delete it
+                    try {
+                        $existingSheet = $excel.Workbook.Worksheets.Item("Analysis Summary")
+                        $existingSheet.Delete()
+                    } catch {
+                        # Sheet doesn't exist, continue
+                    }
+                    
                     # Add a new worksheet for pivot table
                     $pivotWorksheet = $excel.Workbook.Worksheets.Add()
                     $pivotWorksheet.Name = "Analysis Summary"
@@ -517,7 +525,7 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     
                     # Create pivot table using the data from the main worksheet
                     $dataRange = $ws.UsedRange
-                    $pivotCache = $excel.Workbook.PivotCaches.Create(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotCache = $excel.Workbook.PivotCaches().Create(1, $dataRange, 1)  # xlDatabase = 1
                     $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
                     
                     # Configure pivot table fields
@@ -554,6 +562,14 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     
                     # Fallback to simple summary if pivot table fails
                     try {
+                        # Check if Analysis Summary already exists and delete it
+                        try {
+                            $existingSheet = $excel.Workbook.Worksheets.Item("Analysis Summary")
+                            $existingSheet.Delete()
+                        } catch {
+                            # Sheet doesn't exist, continue
+                        }
+                        
                         $pivotWorksheet = $excel.Workbook.Worksheets.Add()
                         $pivotWorksheet.Name = "Analysis Summary"
                         
@@ -640,8 +656,8 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
     }
 } else {
     # Fallback to CSV
-    $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
-    $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+$csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+$AllResults | Export-Csv -Path $csvPath -NoTypeInformation
     Write-Status "ImportExcel module not available, using CSV: $csvPath" "Yellow"
 }
 

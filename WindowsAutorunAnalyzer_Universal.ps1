@@ -590,6 +590,14 @@ function Start-AutorunAnalysis {
                 # Create Pivot Table for better analysis
                 Write-Status "Creating pivot table for analysis..." "Cyan"
                 try {
+                    # Check if Analysis Summary already exists and delete it
+                    try {
+                        $existingSheet = $workbook.Worksheets.Item("Analysis Summary")
+                        $existingSheet.Delete()
+                    } catch {
+                        # Sheet doesn't exist, continue
+                    }
+                    
                     # Add a new worksheet for pivot table
                     $pivotWorksheet = $workbook.Worksheets.Add()
                     $pivotWorksheet.Name = "Analysis Summary"
@@ -601,7 +609,7 @@ function Start-AutorunAnalysis {
                     
                     # Create pivot table using the data from the main worksheet
                     $dataRange = $worksheet.UsedRange
-                    $pivotCache = $workbook.PivotCaches.Create(1, $dataRange, 1)  # xlDatabase = 1
+                    $pivotCache = $workbook.PivotCaches().Create(1, $dataRange, 1)  # xlDatabase = 1
                     $pivotTable = $pivotCache.CreatePivotTable($pivotWorksheet.Cells.Item(3, 1), "AutorunAnalysisPivot", $true, $true)
                     
                     # Configure pivot table fields
@@ -638,6 +646,14 @@ function Start-AutorunAnalysis {
                     
                     # Fallback to simple summary if pivot table fails
                     try {
+                        # Check if Analysis Summary already exists and delete it
+                        try {
+                            $existingSheet = $workbook.Worksheets.Item("Analysis Summary")
+                            $existingSheet.Delete()
+                        } catch {
+                            # Sheet doesn't exist, continue
+                        }
+                        
                         $pivotWorksheet = $workbook.Worksheets.Add()
                         $pivotWorksheet.Name = "Analysis Summary"
                         
@@ -728,8 +744,8 @@ function Start-AutorunAnalysis {
         }
     } catch {
         Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
-        $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
-        $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
+    $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+    $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
         Write-Status "Results saved to CSV: $csvPath" "Yellow"
     }
     
@@ -868,7 +884,7 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
     if ($Mode -eq "local") {
         Write-Status "Using built-in analysis engine..." "Green"
     } else {
-        Write-Status "Failed to obtain script, using portable mode..." "Yellow"
+    Write-Status "Failed to obtain script, using portable mode..." "Yellow"
     }
     Start-AutorunAnalysis -OutputPath $OutputPath
 }
