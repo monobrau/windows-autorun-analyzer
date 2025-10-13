@@ -507,9 +507,9 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                 Write-Status "Creating pivot table for analysis..." "Cyan"
                 try {
                     # Add a new worksheet for pivot table with unique name
-                    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+                    $timestamp = Get-Date -Format "yyyyMMddHHmmss"
                     $pivotWorksheet = $excel.Workbook.Worksheets.Add()
-                    $pivotWorksheet.Name = "Analysis Summary $timestamp"
+                    $pivotWorksheet.Name = "Analysis_$timestamp"
                     
                     # Add title
                     $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
@@ -556,9 +556,9 @@ if (Get-Command Export-Excel -ErrorAction SilentlyContinue) {
                     # Fallback to simple summary if pivot table fails
                     try {
                         # Add a new worksheet for summary with unique name
-                        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+                        $timestamp = Get-Date -Format "yyyyMMddHHmmss"
                         $pivotWorksheet = $excel.Workbook.Worksheets.Add()
-                        $pivotWorksheet.Name = "Analysis Summary $timestamp"
+                        $pivotWorksheet.Name = "Analysis_$timestamp"
                         
                         # Add title
                         $pivotWorksheet.Cells.Item(1, 1) = "Windows Autorun Analysis Summary"
