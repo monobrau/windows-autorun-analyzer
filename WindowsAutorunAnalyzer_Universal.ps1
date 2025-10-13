@@ -535,11 +535,9 @@ function Start-AutorunAnalysis {
         }
     }
     
-    # Check if ImportExcel module is available
-    Write-Status "Checking for Export-Excel command..." "Cyan"
-    $exportExcelCmd = Get-Command Export-Excel -ErrorAction SilentlyContinue
-    if ($exportExcelCmd) {
-        Write-Status "Export-Excel command found: $($exportExcelCmd.Source)" "Green"
+    # Try to use Export-Excel directly
+    Write-Status "Attempting Excel export..." "Cyan"
+    try {
         try {
             # Create Excel file with color coding
             Write-Status "Creating Excel file with color coding..." "Cyan"
@@ -605,17 +603,11 @@ function Start-AutorunAnalysis {
                 $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
                 Write-Status "Results saved to CSV: $csvPath" "Yellow"
             }
-        } catch {
-            Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
-            $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
-            $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
-            Write-Status "Results saved to CSV: $csvPath" "Yellow"
-        }
-    } else {
-        # Fallback to CSV
+    } catch {
+        Write-Status "Excel export failed, falling back to CSV: $($_.Exception.Message)" "Yellow"
         $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
         $AllResults | Export-Csv -Path $csvPath -NoTypeInformation
-        Write-Status "ImportExcel module not available, using CSV: $csvPath" "Yellow"
+        Write-Status "Results saved to CSV: $csvPath" "Yellow"
     }
     
     # Calculate counts
