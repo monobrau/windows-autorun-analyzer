@@ -1150,7 +1150,8 @@ function Start-AutorunAnalysis {
                 # Open the existing Excel file
                 $workbook = $excel.Workbooks.Open($OutputPath)
                 $worksheet = $workbook.Worksheets.Item(1)
-                
+                $worksheet.Name = "Autorun Data"
+
                 # Add color coding
                 $row = 2  # Start from row 2 (skip header)
                 foreach ($result in $AllResults) {
