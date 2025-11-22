@@ -8,6 +8,9 @@ param(
     [string]$SharePath = "\\server\share\WindowsAutorunAnalyzer.ps1",
     [string]$LocalPath = ".\WindowsAutorunAnalyzer.ps1",
     [string]$OutputPath = "C:\dev\AutorunAnalysis_$(Get-Date -Format 'yyyyMMdd_HHmmss').xlsx",
+    [switch]$EnableVirusTotal,  # Enable VirusTotal hash lookups
+    [string]$VTApiKey = "",     # VirusTotal API key (free tier: 4/min, 500/day)
+    [string]$VTCachePath = ".\vt_cache.json",  # Local cache file for VT results
     [switch]$Help
 )
 
@@ -32,6 +35,9 @@ Parameters:
   -SharePath <string>   : UNC path to script on LAN share
   -LocalPath <string>   : Local path to script file
   -OutputPath <string>  : Output path for analysis results
+  -EnableVirusTotal     : Enable VirusTotal hash lookups (requires API key)
+  -VTApiKey <string>    : VirusTotal API key (free tier: 4/min, 500/day)
+  -VTCachePath <string> : Path to VT cache file (default: .\vt_cache.json)
   -Help                 : Show this help message
 
 Examples:
@@ -49,6 +55,9 @@ Examples:
 
   # Portable mode (no dependencies)
   .\WindowsAutorunAnalyzer_Universal.ps1 -Mode portable
+
+  # With VirusTotal checking (RED/YELLOW items only)
+  .\WindowsAutorunAnalyzer_Universal.ps1 -EnableVirusTotal -VTApiKey "your-api-key-here"
 
 "@
     exit 0
@@ -149,6 +158,128 @@ function Test-ScriptIntegrity {
     } catch {
         Write-Status "Script integrity check failed: $($_.Exception.Message)" "Red"
         return $false
+    }
+}
+
+# Function to load VirusTotal cache
+function Get-VTCache {
+    param([string]$CachePath)
+
+    if (Test-Path $CachePath) {
+        try {
+            $cache = Get-Content $CachePath -Raw | ConvertFrom-Json
+            return $cache
+        } catch {
+            Write-Verbose "Failed to load VT cache: $($_.Exception.Message)"
+            return @{}
+        }
+    }
+    return @{}
+}
+
+# Function to save VirusTotal cache
+function Save-VTCache {
+    param(
+        [hashtable]$Cache,
+        [string]$CachePath
+    )
+
+    try {
+        $Cache | ConvertTo-Json -Depth 10 | Out-File -FilePath $CachePath -Encoding UTF8
+        Write-Verbose "VT cache saved: $CachePath"
+    } catch {
+        Write-Verbose "Failed to save VT cache: $($_.Exception.Message)"
+    }
+}
+
+# Function to query VirusTotal for file hash
+function Get-VirusTotalReport {
+    param(
+        [string]$SHA256Hash,
+        [string]$ApiKey,
+        [hashtable]$Cache
+    )
+
+    # Return cached result if available
+    if ($Cache.ContainsKey($SHA256Hash)) {
+        Write-Verbose "VT cache hit for $SHA256Hash"
+        return $Cache[$SHA256Hash]
+    }
+
+    if ([string]::IsNullOrEmpty($SHA256Hash) -or $SHA256Hash.Length -ne 64) {
+        return @{
+            Detections = "N/A"
+            Permalink = ""
+            Reputation = "Unknown"
+            Error = "Invalid hash"
+        }
+    }
+
+    try {
+        $url = "https://www.virustotal.com/api/v3/files/$SHA256Hash"
+        $headers = @{
+            "x-apikey" = $ApiKey
+        }
+
+        Write-Verbose "Querying VT for $SHA256Hash"
+        $response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers -ErrorAction Stop
+
+        $malicious = $response.data.attributes.last_analysis_stats.malicious
+        $total = $response.data.attributes.last_analysis_stats.malicious +
+                 $response.data.attributes.last_analysis_stats.suspicious +
+                 $response.data.attributes.last_analysis_stats.undetected +
+                 $response.data.attributes.last_analysis_stats.harmless
+
+        $reputation = if ($malicious -gt 5) { "Malicious" }
+                     elseif ($malicious -gt 0) { "Suspicious" }
+                     else { "Clean" }
+
+        $result = @{
+            Detections = "$malicious/$total"
+            Permalink = "https://www.virustotal.com/gui/file/$SHA256Hash"
+            Reputation = $reputation
+            Error = $null
+        }
+
+        # Cache the result
+        $Cache[$SHA256Hash] = $result
+
+        return $result
+
+    } catch {
+        $statusCode = $_.Exception.Response.StatusCode.Value__
+
+        if ($statusCode -eq 404) {
+            # File not found in VT database
+            $result = @{
+                Detections = "0/0"
+                Permalink = ""
+                Reputation = "Not Found"
+                Error = "Not in VT database"
+            }
+        } elseif ($statusCode -eq 429) {
+            # Rate limit exceeded
+            $result = @{
+                Detections = "N/A"
+                Permalink = ""
+                Reputation = "Rate Limited"
+                Error = "API rate limit exceeded"
+            }
+        } else {
+            $result = @{
+                Detections = "N/A"
+                Permalink = ""
+                Reputation = "Error"
+                Error = $_.Exception.Message
+            }
+        }
+
+        # Don't cache errors (except 404)
+        if ($statusCode -eq 404) {
+            $Cache[$SHA256Hash] = $result
+        }
+
+        return $result
     }
 }
 
@@ -837,7 +968,12 @@ function Get-LogonScripts {
 
 # Function to perform the autorun analysis
 function Start-AutorunAnalysis {
-    param($OutputPath)
+    param(
+        $OutputPath,
+        [switch]$EnableVirusTotal,
+        [string]$VTApiKey = "",
+        [string]$VTCachePath = ".\vt_cache.json"
+    )
     
     Write-Status "Starting Windows Autorun Analysis..." "Green"
     Write-Status "Output will be saved to: $OutputPath" "Yellow"
@@ -876,7 +1012,88 @@ function Start-AutorunAnalysis {
     # Logon scripts
     $logonScripts = Get-LogonScripts
     $AllResults += $logonScripts
-    
+
+    # VirusTotal enrichment (if enabled)
+    if ($EnableVirusTotal -and -not [string]::IsNullOrEmpty($VTApiKey)) {
+        Write-Status "VirusTotal checking enabled - enriching results..." "Cyan"
+
+        # Load VT cache
+        $vtCache = Get-VTCache -CachePath $VTCachePath
+        Write-Status "Loaded VT cache with $($vtCache.Count) entries" "Cyan"
+
+        # Filter to RED and YELLOW items only
+        $itemsToCheck = $AllResults | Where-Object { $_.Status -in @('RED', 'YELLOW') -and $_.SHA256Hash -and $_.SHA256Hash.Length -eq 64 }
+
+        # Get unique hashes to avoid duplicate API calls
+        $uniqueHashes = $itemsToCheck | Select-Object -ExpandProperty SHA256Hash -Unique
+        Write-Status "Found $($itemsToCheck.Count) RED/YELLOW items with $($uniqueHashes.Count) unique hashes" "Cyan"
+
+        # Check how many need querying (not in cache)
+        $uncachedHashes = $uniqueHashes | Where-Object { -not $vtCache.ContainsKey($_) }
+        $cachedCount = $uniqueHashes.Count - $uncachedHashes.Count
+
+        Write-Status "Cache hits: $cachedCount, New queries needed: $($uncachedHashes.Count)" "Cyan"
+
+        # Rate limiting: 4 requests/minute = 15 seconds between requests
+        $rateLimitDelay = 15
+
+        if ($uncachedHashes.Count -gt 0) {
+            $estimatedTime = [math]::Ceiling(($uncachedHashes.Count * $rateLimitDelay) / 60)
+            Write-Status "Estimated time for VT queries: ~$estimatedTime minutes" "Yellow"
+            Write-Status "Note: Free API tier allows 4 requests/min, 500/day" "Yellow"
+        }
+
+        # Query VirusTotal for each unique hash
+        $processedCount = 0
+        foreach ($hash in $uniqueHashes) {
+            if (-not $vtCache.ContainsKey($hash)) {
+                $processedCount++
+                Write-Status "[$processedCount/$($uncachedHashes.Count)] Querying VT for: $($hash.Substring(0,16))..." "Cyan"
+
+                $vtResult = Get-VirusTotalReport -SHA256Hash $hash -ApiKey $VTApiKey -Cache $vtCache
+
+                if ($vtResult.Error -eq "API rate limit exceeded") {
+                    Write-Status "Rate limit hit! Saving cache and stopping VT queries..." "Red"
+                    break
+                }
+
+                # Rate limiting: Wait 15 seconds between requests (4/min)
+                if ($processedCount -lt $uncachedHashes.Count) {
+                    Write-Verbose "Waiting $rateLimitDelay seconds for rate limit..."
+                    Start-Sleep -Seconds $rateLimitDelay
+                }
+            }
+        }
+
+        # Save cache after queries
+        Save-VTCache -Cache $vtCache -CachePath $VTCachePath
+        Write-Status "VT cache saved with $($vtCache.Count) entries" "Green"
+
+        # Enrich results with VT data
+        Write-Status "Enriching results with VT data..." "Cyan"
+        foreach ($result in $AllResults) {
+            if ($result.SHA256Hash -and $vtCache.ContainsKey($result.SHA256Hash)) {
+                $vtData = $vtCache[$result.SHA256Hash]
+                $result | Add-Member -NotePropertyName "VT_Detections" -NotePropertyValue $vtData.Detections -Force
+                $result | Add-Member -NotePropertyName "VT_Permalink" -NotePropertyValue $vtData.Permalink -Force
+                $result | Add-Member -NotePropertyName "VT_Reputation" -NotePropertyValue $vtData.Reputation -Force
+            } else {
+                $result | Add-Member -NotePropertyName "VT_Detections" -NotePropertyValue "N/A" -Force
+                $result | Add-Member -NotePropertyName "VT_Permalink" -NotePropertyValue "" -Force
+                $result | Add-Member -NotePropertyName "VT_Reputation" -NotePropertyValue "Not Checked" -Force
+            }
+        }
+
+        Write-Status "VT enrichment complete!" "Green"
+    } else {
+        # Add empty VT columns for consistency
+        foreach ($result in $AllResults) {
+            $result | Add-Member -NotePropertyName "VT_Detections" -NotePropertyValue "Disabled" -Force
+            $result | Add-Member -NotePropertyName "VT_Permalink" -NotePropertyValue "" -Force
+            $result | Add-Member -NotePropertyName "VT_Reputation" -NotePropertyValue "Disabled" -Force
+        }
+    }
+
     # Create output
     Write-Status "Creating output..." "Green"
     
@@ -1253,7 +1470,7 @@ switch ($Mode.ToLower()) {
     }
     "portable" {
         Write-Status "Portable mode: Running embedded analysis..." "Green"
-        $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
+        $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
         $success = $true
         # Exit immediately after portable mode execution
         Write-Status "Universal script completed!" "Cyan"
@@ -1269,7 +1486,7 @@ switch ($Mode.ToLower()) {
             ($currentScriptPath -match "WindowsAutorunAnalyzer_(Auto|Downloaded|FromShare)\.ps1$" -or
              $currentScriptPath -match "autorun\.ps1$")) {
             Write-Status "Already running from downloaded script, using portable mode..." "Green"
-            $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
+            $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
             $success = $true
             # Exit immediately after portable mode execution
             Write-Status "Universal script completed!" "Cyan"
@@ -1291,7 +1508,7 @@ switch ($Mode.ToLower()) {
                         $success = $true
                     } else {
                         Write-Status "Local not found, using portable mode..." "Yellow"
-                        $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
+                        $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
                         Write-Status "Universal script completed!" "Cyan"
                         exit 0
                     }
@@ -1303,7 +1520,7 @@ switch ($Mode.ToLower()) {
                     $success = $true
                 } else {
                     Write-Status "Local not found, using portable mode..." "Yellow"
-                    $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
+                    $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
                     Write-Status "Universal script completed!" "Cyan"
                     exit 0
                 }
@@ -1325,7 +1542,7 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
     if (-not (Test-ScriptIntegrity -ScriptPath $scriptPath)) {
         Write-Status "Script validation failed! Will not execute untrusted script." "Red"
         Write-Status "Falling back to portable mode..." "Yellow"
-        Start-AutorunAnalysis -OutputPath $OutputPath
+        Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
         Write-Status "Universal script completed!" "Cyan"
         exit 0
     }
@@ -1340,7 +1557,7 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
     } catch {
         Write-Status "Error executing script: $($_.Exception.Message)" "Red"
         Write-Status "Falling back to portable mode..." "Yellow"
-        Start-AutorunAnalysis -OutputPath $OutputPath
+        Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
         Write-Status "Universal script completed!" "Cyan"
         exit 0
     }
@@ -1349,14 +1566,14 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
 # Only reach here if no script was executed (portable mode, local mode without script, or failures)
 if ($Mode -eq "local") {
     Write-Status "Using built-in analysis engine..." "Green"
-    Start-AutorunAnalysis -OutputPath $OutputPath
+    Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
 } elseif ($Mode -eq "portable") {
     # Already executed in switch block above, just exit
     Write-Status "Universal script completed!" "Cyan"
     exit 0
 } elseif (-not $success) {
     Write-Status "Failed to obtain script, using portable mode..." "Yellow"
-    Start-AutorunAnalysis -OutputPath $OutputPath
+    Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
 }
 
 Write-Status "Universal script completed!" "Cyan"
