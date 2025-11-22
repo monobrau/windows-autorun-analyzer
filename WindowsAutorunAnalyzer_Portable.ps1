@@ -76,17 +76,16 @@ function Test-SuspiciousItem {
         $Command -match "SupportAssistInstaller\\.exe" -or
         $Command -match "Zoom\\.exe" -or
         # Check for Windows registry entries that should be baseline
-        $Command -match "^[0-9]+$" -or  # Numeric values (like 1, 0, 10, etc.)
-        $Command -match "^[0-9]+\\.[0-9]+E\\+[0-9]+$" -or  # Scientific notation (like 9.51561E+11)
-        $Command -match "^[A-F0-9\\-]+$" -or  # GUIDs (like {A520A1A4-1780-4FF6-BD18-167343C5AF16})
-        $Command -match "^no$" -or  # "no" values
-        $Command -match "^yes$" -or  # "yes" values
-        $Command -match "^0 0 0$" -or  # RGB values
-        $Command -match "^2147484203$" -or  # Specific Windows values
-        $Command -match "^5$" -or  # Common Windows numeric values
-        $Command -match "^10$" -or
-        $Command -match "^1$" -or
-        $Command -match "^0$") {
+        # SECURITY FIX: Use strict GUID format validation to prevent bypass
+        $Command -match "^\{[A-Fa-f0-9]{8}-([A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}\}$" -or  # Proper GUID format only
+        # Only allow specific known Windows registry values (not arbitrary numbers)
+        ($Command -match "^[0-1]$" -and $_.Name -match "^(Enabled|Disabled|Hidden|Show)") -or  # Boolean-like registry values
+        # Scientific notation for specific Windows timestamp values only
+        $Command -match "^[0-9]+\\.[0-9]+E\\+1[1-2]$" -or  # Windows file times (limited to reasonable range)
+        # Specific known Windows configuration values
+        $Command -match "^(no|yes)$" -or  # Explicit yes/no values
+        $Command -match "^0 0 0$" -or  # RGB color values
+        $Command -match "^(2147484203|2147483648)$") {  # Known Windows DWORD values
         $isBaseline = $true
     }
     

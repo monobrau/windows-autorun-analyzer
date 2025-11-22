@@ -116,17 +116,16 @@ function Test-SuspiciousItem {
         $Command -match "SupportAssistInstaller\\.exe" -or
         $Command -match "Zoom\\.exe" -or
         # Check for Windows registry entries that should be baseline
-        $Command -match "^[0-9]+$" -or  # Numeric values (like 1, 0, 10, etc.)
-        $Command -match "^[0-9]+\\.[0-9]+E\\+[0-9]+$" -or  # Scientific notation (like 9.51561E+11)
-        $Command -match "^[A-F0-9\\-]+$" -or  # GUIDs (like {A520A1A4-1780-4FF6-BD18-167343C5AF16})
-        $Command -match "^no$" -or  # "no" values
-        $Command -match "^yes$" -or  # "yes" values
-        $Command -match "^0 0 0$" -or  # RGB values
-        $Command -match "^2147484203$" -or  # Specific Windows values
-        $Command -match "^5$" -or  # Common Windows numeric values
-        $Command -match "^10$" -or
-        $Command -match "^1$" -or
-        $Command -match "^0$") {
+        # SECURITY FIX: Use strict GUID format validation to prevent bypass
+        $Command -match "^\{[A-Fa-f0-9]{8}-([A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}\}$" -or  # Proper GUID format only
+        # Only allow specific known Windows registry values (not arbitrary numbers)
+        ($Command -match "^[0-1]$" -and $_.Name -match "^(Enabled|Disabled|Hidden|Show)") -or  # Boolean-like registry values
+        # Scientific notation for specific Windows timestamp values only
+        $Command -match "^[0-9]+\\.[0-9]+E\\+1[1-2]$" -or  # Windows file times (limited to reasonable range)
+        # Specific known Windows configuration values
+        $Command -match "^(no|yes)$" -or  # Explicit yes/no values
+        $Command -match "^0 0 0$" -or  # RGB color values
+        $Command -match "^(2147484203|2147483648)$") {  # Known Windows DWORD values
         $isBaseline = $true
     }
     
@@ -242,6 +241,28 @@ function Get-FileInfo {
     return $result
 }
 
+# Function to sanitize data for CSV export (prevent formula injection)
+function Protect-CsvValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) {
+        return $Value
+    }
+
+    # SECURITY FIX: Prevent CSV injection attacks
+    # If value starts with =, +, -, @, or tab, prefix with single quote
+    if ($Value -match "^[=+\-@`t]") {
+        return "'" + $Value
+    }
+
+    # Also protect against pipe character which can be dangerous in some contexts
+    if ($Value.StartsWith("|")) {
+        return "'" + $Value
+    }
+
+    return $Value
+}
+
 # Function to get all user profiles
 function Get-AllUserProfiles {
     $profiles = @()
@@ -321,13 +342,13 @@ function Get-RegistryAutoruns {
                         $fileInfo = Get-FileInfo -FilePath $_.Value
                         $autoruns += [PSCustomObject]@{
                             Status = $status
-                            User = $Username
+                            User = Protect-CsvValue $Username
                             Type = "Registry"
-                            Location = $regPath
-                            Name = $_.Name
-                            Command = $_.Value
-                            Publisher = $fileInfo.Publisher
-                            ImagePath = $fileInfo.ImagePath
+                            Location = Protect-CsvValue $regPath
+                            Name = Protect-CsvValue $_.Name
+                            Command = Protect-CsvValue $_.Value
+                            Publisher = Protect-CsvValue $fileInfo.Publisher
+                            ImagePath = Protect-CsvValue $fileInfo.ImagePath
                             MD5Hash = $fileInfo.MD5Hash
                             SHA1Hash = $fileInfo.SHA1Hash
                             SHA256Hash = $fileInfo.SHA256Hash
@@ -335,7 +356,7 @@ function Get-RegistryAutoruns {
                             VerifiedSigner = $fileInfo.VerifiedSigner
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
-                            Reason = $suspicious.Reason
+                            Reason = Protect-CsvValue $suspicious.Reason
                         }
                     }
                 }
@@ -367,13 +388,13 @@ function Get-StartupFolderAutoruns {
                     $fileInfo = Get-FileInfo -FilePath $_.FullName
                     $autoruns += [PSCustomObject]@{
                         Status = $status
-                        User = $Username
+                        User = Protect-CsvValue $Username
                         Type = "Startup Folder"
-                        Location = $startupPath
-                        Name = $_.Name
-                        Command = $_.FullName
-                        Publisher = $fileInfo.Publisher
-                        ImagePath = $fileInfo.ImagePath
+                        Location = Protect-CsvValue $startupPath
+                        Name = Protect-CsvValue $_.Name
+                        Command = Protect-CsvValue $_.FullName
+                        Publisher = Protect-CsvValue $fileInfo.Publisher
+                        ImagePath = Protect-CsvValue $fileInfo.ImagePath
                         MD5Hash = $fileInfo.MD5Hash
                         SHA1Hash = $fileInfo.SHA1Hash
                         SHA256Hash = $fileInfo.SHA256Hash
@@ -381,7 +402,7 @@ function Get-StartupFolderAutoruns {
                         VerifiedSigner = $fileInfo.VerifiedSigner
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
-                        Reason = $suspicious.Reason
+                        Reason = Protect-CsvValue $suspicious.Reason
                     }
                 }
             }
@@ -412,12 +433,12 @@ function Get-ScheduledTasks {
                         Status = $status
                         User = "SYSTEM"
                         Type = "Scheduled Task"
-                        Location = $task.TaskPath
-                        Name = $task.TaskName
-                        Command = $action.Execute
-                        Arguments = $action.Arguments
-                        Publisher = $fileInfo.Publisher
-                        ImagePath = $fileInfo.ImagePath
+                        Location = Protect-CsvValue $task.TaskPath
+                        Name = Protect-CsvValue $task.TaskName
+                        Command = Protect-CsvValue $action.Execute
+                        Arguments = Protect-CsvValue $action.Arguments
+                        Publisher = Protect-CsvValue $fileInfo.Publisher
+                        ImagePath = Protect-CsvValue $fileInfo.ImagePath
                         MD5Hash = $fileInfo.MD5Hash
                         SHA1Hash = $fileInfo.SHA1Hash
                         SHA256Hash = $fileInfo.SHA256Hash
@@ -425,7 +446,7 @@ function Get-ScheduledTasks {
                         VerifiedSigner = $fileInfo.VerifiedSigner
                         IsSuspicious = $suspicious.IsSuspicious
                         IsBaseline = $suspicious.IsBaseline
-                        Reason = $suspicious.Reason
+                        Reason = Protect-CsvValue $suspicious.Reason
                     }
                 }
             }
@@ -456,12 +477,12 @@ function Get-Services {
                     User = "SYSTEM"
                     Type = "Service"
                     Location = "Services"
-                    Name = $service.Name
-                    Command = $service.PathName
+                    Name = Protect-CsvValue $service.Name
+                    Command = Protect-CsvValue $service.PathName
                     StartMode = $service.StartMode
                     State = $service.State
-                    Publisher = $fileInfo.Publisher
-                    ImagePath = $fileInfo.ImagePath
+                    Publisher = Protect-CsvValue $fileInfo.Publisher
+                    ImagePath = Protect-CsvValue $fileInfo.ImagePath
                     MD5Hash = $fileInfo.MD5Hash
                     SHA1Hash = $fileInfo.SHA1Hash
                     SHA256Hash = $fileInfo.SHA256Hash
@@ -469,7 +490,7 @@ function Get-Services {
                     VerifiedSigner = $fileInfo.VerifiedSigner
                     IsSuspicious = $suspicious.IsSuspicious
                     IsBaseline = $suspicious.IsBaseline
-                    Reason = $suspicious.Reason
+                    Reason = Protect-CsvValue $suspicious.Reason
                 }
             }
         }
@@ -504,13 +525,13 @@ function Get-LogonScripts {
                         $fileInfo = Get-FileInfo -FilePath $logonScript.UserInitMprLogonScript
                         $scripts += [PSCustomObject]@{
                             Status = $status
-                            User = $profile.Username
+                            User = Protect-CsvValue $profile.Username
                             Type = "Logon Script"
-                            Location = $logonScriptPath
+                            Location = Protect-CsvValue $logonScriptPath
                             Name = "UserInitMprLogonScript"
-                            Command = $logonScript.UserInitMprLogonScript
-                            Publisher = $fileInfo.Publisher
-                            ImagePath = $fileInfo.ImagePath
+                            Command = Protect-CsvValue $logonScript.UserInitMprLogonScript
+                            Publisher = Protect-CsvValue $fileInfo.Publisher
+                            ImagePath = Protect-CsvValue $fileInfo.ImagePath
                             MD5Hash = $fileInfo.MD5Hash
                             SHA1Hash = $fileInfo.SHA1Hash
                             SHA256Hash = $fileInfo.SHA256Hash
@@ -518,7 +539,7 @@ function Get-LogonScripts {
                             VerifiedSigner = $fileInfo.VerifiedSigner
                             IsSuspicious = $suspicious.IsSuspicious
                             IsBaseline = $suspicious.IsBaseline
-                            Reason = $suspicious.Reason
+                            Reason = Protect-CsvValue $suspicious.Reason
                         }
                     }
                 }
