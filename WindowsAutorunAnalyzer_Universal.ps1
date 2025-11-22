@@ -167,7 +167,20 @@ function Get-VTCache {
 
     if (Test-Path $CachePath) {
         try {
-            $cache = Get-Content $CachePath -Raw | ConvertFrom-Json
+            $jsonContent = Get-Content $CachePath -Raw | ConvertFrom-Json
+
+            # BUG FIX: Convert PSCustomObject to hashtable
+            # ConvertFrom-Json returns PSCustomObject, but we need hashtable for .ContainsKey()
+            $cache = @{}
+            $jsonContent.PSObject.Properties | ForEach-Object {
+                $cache[$_.Name] = @{
+                    Detections = $_.Value.Detections
+                    Permalink = $_.Value.Permalink
+                    Reputation = $_.Value.Reputation
+                    Error = $_.Value.Error
+                }
+            }
+
             return $cache
         } catch {
             Write-Verbose "Failed to load VT cache: $($_.Exception.Message)"
