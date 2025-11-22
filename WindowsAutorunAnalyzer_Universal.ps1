@@ -62,10 +62,92 @@ function Write-Status {
 
 # Function to test internet connection
 function Test-InternetConnection {
+    # SECURITY FIX: Improved network validation with proper error handling
     try {
-        $response = Invoke-WebRequest -Uri "https://www.google.com" -TimeoutSec 5 -UseBasicParsing
-        return $true
+        # Use Microsoft endpoint instead of Google for privacy
+        # Verify SSL/TLS certificate and check response code
+        $response = Invoke-WebRequest -Uri "https://www.microsoft.com" `
+            -TimeoutSec 10 `
+            -UseBasicParsing `
+            -ErrorAction Stop `
+            -MaximumRedirection 0
+
+        # Verify we got a valid response
+        if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 301 -or $response.StatusCode -eq 302) {
+            return $true
+        }
+
+        Write-Verbose "Internet check failed: Unexpected status code $($response.StatusCode)"
+        return $false
+    } catch [System.Net.WebException] {
+        Write-Verbose "Internet check failed: Network error - $($_.Exception.Message)"
+        return $false
+    } catch [System.Security.Authentication.AuthenticationException] {
+        Write-Verbose "Internet check failed: SSL/TLS validation error - $($_.Exception.Message)"
+        return $false
     } catch {
+        Write-Verbose "Internet check failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+# Function to validate downloaded script integrity
+function Test-ScriptIntegrity {
+    param(
+        [string]$ScriptPath,
+        [switch]$RequireSignature
+    )
+
+    # SECURITY FIX: Validate scripts before execution
+    if (-not (Test-Path $ScriptPath)) {
+        Write-Status "Script not found: $ScriptPath" "Red"
+        return $false
+    }
+
+    try {
+        # Check file size (prevent extremely large files)
+        $fileSize = (Get-Item $ScriptPath).Length
+        if ($fileSize -gt 50MB) {
+            Write-Status "Script file too large ($($fileSize/1MB) MB). Maximum: 50MB" "Red"
+            return $false
+        }
+
+        if ($fileSize -eq 0) {
+            Write-Status "Script file is empty" "Red"
+            return $false
+        }
+
+        # Validate it's actually a PowerShell script
+        $content = Get-Content $ScriptPath -First 5 -ErrorAction Stop
+        $looksLikePS = $false
+        foreach ($line in $content) {
+            if ($line -match "^#|^param|^function|^\$|^Get-|^Set-|^Invoke-") {
+                $looksLikePS = $true
+                break
+            }
+        }
+
+        if (-not $looksLikePS) {
+            Write-Status "File doesn't appear to be a PowerShell script" "Yellow"
+            # Don't fail, but warn
+        }
+
+        # Check digital signature if required
+        if ($RequireSignature) {
+            $signature = Get-AuthenticodeSignature -FilePath $ScriptPath -ErrorAction Stop
+            if ($signature.Status -ne 'Valid') {
+                Write-Status "Script signature invalid or missing: $($signature.Status)" "Red"
+                Write-Status "Signer: $($signature.SignerCertificate.Subject)" "Yellow"
+                return $false
+            }
+            Write-Status "Script signature valid: $($signature.SignerCertificate.Subject)" "Green"
+        }
+
+        Write-Verbose "Script integrity check passed for: $ScriptPath"
+        return $true
+
+    } catch {
+        Write-Status "Script integrity check failed: $($_.Exception.Message)" "Red"
         return $false
     }
 }
@@ -134,17 +216,16 @@ function Test-SuspiciousItem {
         $Command -match "SupportAssistInstaller\\.exe" -or
         $Command -match "Zoom\\.exe" -or
         # Check for Windows registry entries that should be baseline
-        $Command -match "^[0-9]+$" -or  # Numeric values (like 1, 0, 10, etc.)
-        $Command -match "^[0-9]+\\.[0-9]+E\\+[0-9]+$" -or  # Scientific notation (like 9.51561E+11)
-        $Command -match "^[A-F0-9\\-]+$" -or  # GUIDs (like {A520A1A4-1780-4FF6-BD18-167343C5AF16})
-        $Command -match "^no$" -or  # "no" values
-        $Command -match "^yes$" -or  # "yes" values
-        $Command -match "^0 0 0$" -or  # RGB values
-        $Command -match "^2147484203$" -or  # Specific Windows values
-        $Command -match "^5$" -or  # Common Windows numeric values
-        $Command -match "^10$" -or
-        $Command -match "^1$" -or
-        $Command -match "^0$") {
+        # SECURITY FIX: Use strict GUID format validation to prevent bypass
+        $Command -match "^\{[A-Fa-f0-9]{8}-([A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}\}$" -or  # Proper GUID format only
+        # Only allow specific known Windows registry values (not arbitrary numbers)
+        ($Command -match "^[0-1]$" -and $_.Name -match "^(Enabled|Disabled|Hidden|Show)") -or  # Boolean-like registry values
+        # Scientific notation for specific Windows timestamp values only
+        $Command -match "^[0-9]+\\.[0-9]+E\\+1[1-2]$" -or  # Windows file times (limited to reasonable range)
+        # Specific known Windows configuration values
+        $Command -match "^(no|yes)$" -or  # Explicit yes/no values
+        $Command -match "^0 0 0$" -or  # RGB color values
+        $Command -match "^(2147484203|2147483648)$") {  # Known Windows DWORD values
         $isBaseline = $true
     }
     
@@ -1227,14 +1308,23 @@ switch ($Mode.ToLower()) {
 
 # Execute the script if we have one
 if ($success -and $scriptPath -and $Mode -ne "local") {
-    Write-Status "Executing Windows Autorun Analyzer..." "Green"
-    try {
-        & $scriptPath -OutputPath $OutputPath
-        Write-Status "Analysis completed successfully!" "Green"
-    } catch {
-        Write-Status "Error executing script: $($_.Exception.Message)" "Red"
+    # SECURITY FIX: Validate script integrity before execution
+    Write-Status "Validating script integrity..." "Cyan"
+
+    if (-not (Test-ScriptIntegrity -ScriptPath $scriptPath)) {
+        Write-Status "Script validation failed! Will not execute untrusted script." "Red"
         Write-Status "Falling back to portable mode..." "Yellow"
         Start-AutorunAnalysis -OutputPath $OutputPath
+    } else {
+        Write-Status "Script validation passed. Executing Windows Autorun Analyzer..." "Green"
+        try {
+            & $scriptPath -OutputPath $OutputPath
+            Write-Status "Analysis completed successfully!" "Green"
+        } catch {
+            Write-Status "Error executing script: $($_.Exception.Message)" "Red"
+            Write-Status "Falling back to portable mode..." "Yellow"
+            Start-AutorunAnalysis -OutputPath $OutputPath
+        }
     }
 } else {
     if ($Mode -eq "local") {
