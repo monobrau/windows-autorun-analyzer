@@ -1542,14 +1542,19 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
     if (-not (Test-ScriptIntegrity -ScriptPath $scriptPath)) {
         Write-Status "Script validation failed! Will not execute untrusted script." "Red"
         Write-Status "Falling back to portable mode..." "Yellow"
-        Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
+        Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
         Write-Status "Universal script completed!" "Cyan"
         exit 0
     }
 
     Write-Status "Script validation passed. Executing Windows Autorun Analyzer..." "Green"
     try {
-        & $scriptPath -OutputPath $OutputPath
+        # BUG FIX: Pass VT parameters to child script
+        if ($EnableVirusTotal -and -not [string]::IsNullOrEmpty($VTApiKey)) {
+            & $scriptPath -OutputPath $OutputPath -EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
+        } else {
+            & $scriptPath -OutputPath $OutputPath
+        }
         # BUG FIX: Exit after successful execution to prevent fall-through
         Write-Status "Analysis completed successfully!" "Green"
         Write-Status "Universal script completed!" "Cyan"
@@ -1557,7 +1562,7 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
     } catch {
         Write-Status "Error executing script: $($_.Exception.Message)" "Red"
         Write-Status "Falling back to portable mode..." "Yellow"
-        Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
+        Start-AutorunAnalysis -OutputPath $OutputPath -EnableVirusTotal:$EnableVirusTotal -VTApiKey $VTApiKey -VTCachePath $VTCachePath
         Write-Status "Universal script completed!" "Cyan"
         exit 0
     }
