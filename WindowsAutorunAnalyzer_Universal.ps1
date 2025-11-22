@@ -1255,16 +1255,25 @@ switch ($Mode.ToLower()) {
         Write-Status "Portable mode: Running embedded analysis..." "Green"
         $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
         $success = $true
+        # Exit immediately after portable mode execution
+        Write-Status "Universal script completed!" "Cyan"
+        exit 0
     }
     "auto" {
         Write-Status "Auto mode: Detecting best method..." "Yellow"
-        
-        # Check if we're already running from GitHub (prevent infinite loop)
+
+        # BUG FIX: Improved recursion detection - check if we're running from a downloaded file
+        # Prevents infinite download loops by detecting auto-downloaded scripts
         $currentScriptPath = $MyInvocation.PSCommandPath
-        if ($currentScriptPath -and $currentScriptPath -match "WindowsAutorunAnalyzer.*\.ps1$") {
+        if ($currentScriptPath -and
+            ($currentScriptPath -match "WindowsAutorunAnalyzer_(Auto|Downloaded|FromShare)\.ps1$" -or
+             $currentScriptPath -match "autorun\.ps1$")) {
             Write-Status "Already running from downloaded script, using portable mode..." "Green"
             $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
             $success = $true
+            # Exit immediately after portable mode execution
+            Write-Status "Universal script completed!" "Cyan"
+            exit 0
         } else {
             # Try GitHub first if internet is available
             if (Test-InternetConnection) {
@@ -1283,7 +1292,8 @@ switch ($Mode.ToLower()) {
                     } else {
                         Write-Status "Local not found, using portable mode..." "Yellow"
                         $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
-                        $success = $true
+                        Write-Status "Universal script completed!" "Cyan"
+                        exit 0
                     }
                 }
             } else {
@@ -1294,7 +1304,8 @@ switch ($Mode.ToLower()) {
                 } else {
                     Write-Status "Local not found, using portable mode..." "Yellow"
                     $csvPath = Start-AutorunAnalysis -OutputPath $OutputPath
-                    $success = $true
+                    Write-Status "Universal script completed!" "Cyan"
+                    exit 0
                 }
             }
         }
@@ -1315,23 +1326,36 @@ if ($success -and $scriptPath -and $Mode -ne "local") {
         Write-Status "Script validation failed! Will not execute untrusted script." "Red"
         Write-Status "Falling back to portable mode..." "Yellow"
         Start-AutorunAnalysis -OutputPath $OutputPath
-    } else {
-        Write-Status "Script validation passed. Executing Windows Autorun Analyzer..." "Green"
-        try {
-            & $scriptPath -OutputPath $OutputPath
-            Write-Status "Analysis completed successfully!" "Green"
-        } catch {
-            Write-Status "Error executing script: $($_.Exception.Message)" "Red"
-            Write-Status "Falling back to portable mode..." "Yellow"
-            Start-AutorunAnalysis -OutputPath $OutputPath
-        }
+        Write-Status "Universal script completed!" "Cyan"
+        exit 0
     }
-} else {
-    if ($Mode -eq "local") {
-        Write-Status "Using built-in analysis engine..." "Green"
-    } else {
+
+    Write-Status "Script validation passed. Executing Windows Autorun Analyzer..." "Green"
+    try {
+        & $scriptPath -OutputPath $OutputPath
+        # BUG FIX: Exit after successful execution to prevent fall-through
+        Write-Status "Analysis completed successfully!" "Green"
+        Write-Status "Universal script completed!" "Cyan"
+        exit 0
+    } catch {
+        Write-Status "Error executing script: $($_.Exception.Message)" "Red"
+        Write-Status "Falling back to portable mode..." "Yellow"
+        Start-AutorunAnalysis -OutputPath $OutputPath
+        Write-Status "Universal script completed!" "Cyan"
+        exit 0
+    }
+}
+
+# Only reach here if no script was executed (portable mode, local mode without script, or failures)
+if ($Mode -eq "local") {
+    Write-Status "Using built-in analysis engine..." "Green"
+    Start-AutorunAnalysis -OutputPath $OutputPath
+} elseif ($Mode -eq "portable") {
+    # Already executed in switch block above, just exit
+    Write-Status "Universal script completed!" "Cyan"
+    exit 0
+} elseif (-not $success) {
     Write-Status "Failed to obtain script, using portable mode..." "Yellow"
-    }
     Start-AutorunAnalysis -OutputPath $OutputPath
 }
 
