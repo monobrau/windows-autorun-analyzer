@@ -1152,24 +1152,19 @@ function Start-AutorunAnalysis {
                 $worksheet = $workbook.Worksheets.Item(1)
                 $worksheet.Name = "Autorun Data"
 
-                # Add color coding
+                # Add color coding - OPTIMIZED: Use Range operations instead of individual cells
                 $row = 2  # Start from row 2 (skip header)
+                $lastCol = $worksheet.UsedRange.Columns.Count
                 foreach ($result in $AllResults) {
                     if ($result.Status -eq "RED") {
-                        # Color the entire row red
-                        for ($col = 1; $col -le 20; $col++) {
-                            $worksheet.Cells.Item($row, $col).Interior.Color = 255  # Light Red
-                        }
+                        # Color the entire row red using Range (much faster than cell-by-cell)
+                        $worksheet.Range($worksheet.Cells.Item($row, 1), $worksheet.Cells.Item($row, $lastCol)).Interior.Color = 255  # Light Red
                     } elseif ($result.Status -eq "YELLOW") {
-                        # Color the entire row yellow
-                        for ($col = 1; $col -le 20; $col++) {
-                            $worksheet.Cells.Item($row, $col).Interior.Color = 65535  # Light Yellow
-                        }
+                        # Color the entire row yellow using Range
+                        $worksheet.Range($worksheet.Cells.Item($row, 1), $worksheet.Cells.Item($row, $lastCol)).Interior.Color = 65535  # Light Yellow
                     } elseif ($result.Status -eq "WHITE") {
-                        # Color the entire row white
-                        for ($col = 1; $col -le 20; $col++) {
-                            $worksheet.Cells.Item($row, $col).Interior.Color = 16777215  # White
-                        }
+                        # Color the entire row white using Range
+                        $worksheet.Range($worksheet.Cells.Item($row, 1), $worksheet.Cells.Item($row, $lastCol)).Interior.Color = 16777215  # White
                     }
                     $row++
                 }
